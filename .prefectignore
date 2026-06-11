@@ -1,0 +1,21 @@
+# prefect artifacts
+.prefectignore
+
+# python artifacts
+__pycache__/
+*.egg-info/
+*.log
+*.pyc
+.pytest_cache/
+.venv/
+
+# environments and secrets
+.env
+
+# local data and browser profile
+data/
+downloads/
+.chromium/
+
+# vcs
+.git/

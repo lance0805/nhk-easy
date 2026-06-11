@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}NHK Easy Reader{% endblock %}
+{% block content %}
+  {% if not articles %}
+    <p>No articles yet. Run the fetch flow first.</p>
+  {% endif %}
+  {% for a in articles %}
+    <div class="article-item">
+      {% if a.published_at %}<time>{{ a.published_at.strftime("%Y-%m-%d %H:%M") }}</time>{% endif %}
+      <a href="/article/{{ a.news_id }}">{{ a.title_with_ruby | safe if a.title_with_ruby else a.title }}</a>
+    </div>
+  {% endfor %}
+{% endblock %}

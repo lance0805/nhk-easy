@@ -1,0 +1,23 @@
+# Prefect deployment configuration for nhk-easy.
+# Run: uv run prefect deploy --all  (from the repo root)
+
+name: nhk-easy
+
+build: null
+push: null
+pull: null
+
+deployments:
+  - name: fetch-nhk-easy-daily
+    description: "Daily download of NHK News Web Easy articles (text + furigana + audio)."
+    entrypoint: nhk_easy/flows/daily_fetch.py:daily_fetch
+    parameters: {}
+    schedules:
+      - cron: "0 21 * * *"
+        timezone: "Asia/Tokyo"
+        active: true
+    work_pool:
+      name: default
+    job_variables:
+      env:
+        LOG_LEVEL: INFO

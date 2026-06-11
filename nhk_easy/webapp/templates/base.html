@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}NHK Easy Reader{% endblock %}</title>
+  <style>
+    body {
+      font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 1rem;
+      line-height: 2.2;
+      color: #222;
+    }
+    a { color: #0a58ca; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header { border-bottom: 2px solid #0a58ca; margin-bottom: 1.5rem; }
+    header h1 { font-size: 1.3rem; }
+    .article-item { margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.8rem; }
+    .article-item time { color: #888; font-size: 0.85rem; display: block; }
+    .article-title { font-size: 1.4rem; line-height: 2.4; }
+    .article-date { color: #888; font-size: 0.9rem; }
+    .article-body p { margin: 1rem 0; }
+    rt { font-size: 0.55em; color: #555; }
+    audio { width: 100%; margin: 1rem 0; }
+    img.article-image { max-width: 100%; border-radius: 4px; }
+    /* NHK word-class coloring */
+    .color1 { background-color: #ffe1e1; }
+    .color2 { background-color: #e1f0ff; }
+    .color3 { background-color: #e6ffe1; }
+    .color4 { background-color: #fff3d6; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><a href="/">NHK Easy Reader</a></h1>
+  </header>
+  {% block content %}{% endblock %}
+</body>
+</html>

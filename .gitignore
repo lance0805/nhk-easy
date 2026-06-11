@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.pytest_cache/
+.ruff_cache/
+data/
+downloads/
+.chromium/
+*.egg-info/
+dist/
+.DS_Store

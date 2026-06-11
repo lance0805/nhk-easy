@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ article.title }}{% endblock %}
+{% block content %}
+  <h1 class="article-title">{{ article.title_with_ruby | safe if article.title_with_ruby else article.title }}</h1>
+  {% if article.published_at %}
+    <p class="article-date">{{ article.published_at.strftime("%Y年%m月%d日 %H:%M") }}</p>
+  {% endif %}
+  {% if article.audio_path %}
+    <audio controls preload="none" src="/audio/{{ article.news_id }}"></audio>
+  {% endif %}
+  {% if article.image_url %}
+    <img class="article-image" src="{{ article.image_url }}" alt="">
+  {% endif %}
+  <div class="article-body">{{ article.body_html | safe }}</div>
+  <p><a href="{{ article.url }}" target="_blank" rel="noopener">原文 ↗</a></p>
+{% endblock %}
