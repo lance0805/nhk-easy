@@ -44,6 +44,10 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 RUN uv run playwright install chromium
 
+# Prefect's docker worker starts flow-run containers with `prefect flow-run
+# execute`, resolved via the system PATH - expose the uv venv there.
+ENV PATH="/app/.venv/bin:$PATH"
+
 COPY nhk_easy ./nhk_easy
 
 # Keep mutable state (browser profile, downloaded audio) outside /app so it
