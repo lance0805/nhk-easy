@@ -1,0 +1,32 @@
+# vcs
+.git
+
+# python build artifacts
+__pycache__
+*.py[cod]
+*.egg-info
+dist
+
+# virtual envs
+.venv
+
+# local data / caches
+data
+downloads
+.chromium
+.pytest_cache
+.ruff_cache
+
+# env files (settings come from container env)
+.env
+
+# docs / docker
+README.md
+SPEC.md
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# tests / scripts
+tests
+scripts

@@ -12,5 +12,52 @@ services:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
 
+  # One-off fetch run: docker compose run --rm fetcher
+  # (Prefect-scheduled runs can use the same image with a docker work pool.)
+  fetcher:
+    build: .
+    image: nhk-easy:latest
+    container_name: nhk-easy-fetcher
+    profiles: ["fetch"]
+    depends_on:
+      - postgres
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DATABASE: nhk_easy
+      HTTP_PROXY_URL: ${HTTP_PROXY_URL:-}
+    volumes:
+      # Named volume, NOT the host .chromium: a profile created by macOS
+      # Chromium is unusable in the Linux container (cookies are encrypted
+      # via the OS keychain), which breaks the NHK session with 401s. The
+      # container passes the consent gate itself on first run.
+      - chromium:/data/chromium
+      - ./data:/data/nhk
+    # Chromium needs more shared memory than the docker default (64MB)
+    shm_size: "1gb"
+
+  # Local web reader at http://127.0.0.1:8000
+  reader:
+    image: nhk-easy:latest
+    container_name: nhk-easy-reader
+    profiles: ["reader"]
+    depends_on:
+      - postgres
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DATABASE: nhk_easy
+    volumes:
+      - ./data:/data/nhk
+    ports:
+      - "8000:8000"
+    command: ["uv", "run", "uvicorn", "nhk_easy.webapp.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  chromium:
