@@ -1,4 +1,6 @@
-# Web reader only. The fetch flow is deployed separately via multi-deploy.py.
+# Web reader only. The fetch flow is deployed via multi-deploy.py onto the
+# existing local-pool docker worker (deployment-level job_variables carry
+# the nhk-easy volume mounts), so no worker service is needed here.
 #
 # Setup: put POSTGRES_* into .env (see .env.example), then:
 #   docker compose up -d

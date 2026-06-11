@@ -17,13 +17,17 @@ from prefect.docker import DockerImage
 
 from nhk_easy.flows.daily_fetch import daily_fetch
 
-# Volume mounts are NOT set here: the nhk-easy-pool work pool's base job
-# template provides the defaults (<repo>/.chromium-docker:/data/chromium and
-# <repo>/data:/data/nhk on the worker host). The browser profile dir is kept
-# separate from any host-run .chromium profile: a profile created by macOS
-# Chromium is unusable inside the Linux container (cookies are encrypted via
-# the OS keychain); the container passes the NHK consent gate itself on
-# first run and the profile persists afterwards.
+import os
+
+# Repo root on the WORKER host (not the machine running this script) - the
+# bind-mount sources must exist where flow-run containers are spawned.
+# Deployment-level job_variables override the work pool's volume defaults,
+# so this rides MiraiGuard's existing local-pool worker; no extra worker
+# container or dedicated pool is needed.
+_WORKER_HOST_ROOT = os.environ.get(
+    "NHK_EASY_HOST_ROOT", "/Users/hyl/Documents/source/lance/nhk-easy"
+)
+
 COMMON_JOB_VARS = {
     "image_pull_policy": "Never",
     "env": {
@@ -36,6 +40,14 @@ COMMON_JOB_VARS = {
         "PROFILE_DIR": "/data/chromium",
         "DATA_DIR": "/data/nhk",
     },
+    "volumes": [
+        # Kept separate from any host-run .chromium profile: a profile
+        # created by macOS Chromium is unusable inside the Linux container
+        # (cookies are encrypted via the OS keychain). The container passes
+        # the NHK consent gate itself on first run.
+        f"{_WORKER_HOST_ROOT}/.chromium-docker:/data/chromium",
+        f"{_WORKER_HOST_ROOT}/data:/data/nhk",
+    ],
 }
 
 
@@ -66,5 +78,5 @@ if __name__ == "__main__":
             pull=False,
         ),
         push=False,
-        work_pool_name="nhk-easy-pool",
+        work_pool_name="local-pool",
     )
