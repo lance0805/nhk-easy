@@ -7,7 +7,7 @@ Deploy:       uv run python multi-deploy.py   (builds image + registers deployme
 import asyncio
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import parse_qs, urlparse
 
 from crawl4ai import AsyncWebCrawler
@@ -42,6 +42,23 @@ def extract_video_m3u8(movie_uri: str | None) -> str | None:
         return None
     query = parse_qs(urlparse(movie_uri).query)
     return query.get("mrurl", [None])[0]
+
+
+def filter_recent(
+    entries: list[dict], max_age_days: int | None, now: datetime | None = None
+) -> list[dict]:
+    """Keep entries published within max_age_days (None = no filter)."""
+    if max_age_days is None:
+        return entries
+    cutoff = (now or datetime.now()) - timedelta(days=max_age_days)
+    kept = []
+    for entry in entries:
+        raw = entry.get("news_prearranged_time") or entry.get(
+            "news_publication_time"
+        )
+        if raw and datetime.strptime(raw, "%Y-%m-%d %H:%M:%S") >= cutoff:
+            kept.append(entry)
+    return kept
 
 
 def entry_to_article(entry: dict) -> Article:
@@ -104,6 +121,7 @@ async def process_article(
 async def daily_fetch(
     limit: int | None = None,
     settings_block_name: str = DEFAULT_SETTINGS_BLOCK,
+    max_age_days: int | None = None,
 ) -> list[str]:
     """Fetch all new articles (text + audio) into PostgreSQL.
 
@@ -111,6 +129,8 @@ async def daily_fetch(
         limit: Process at most this many new articles (small-scale validation).
         settings_block_name: Prefect Secret block holding the JSON config
             (MiraiGuard pattern). Pass "" to use .env/env vars instead.
+        max_age_days: Only process articles published within this many days
+            (None = no age filter; dedup against the DB still applies).
     """
     logger = get_run_logger()
     settings = await resolve_settings(settings_block_name)
@@ -127,6 +147,11 @@ async def daily_fetch(
         entries = await fetch_news_list(crawler)
         entries = [e for e in entries if _NEWS_ID_RE.match(e.get("news_id", ""))]
         logger.info(f"Site lists {len(entries)} articles")
+        entries = filter_recent(entries, max_age_days)
+        if max_age_days is not None:
+            logger.info(
+                f"{len(entries)} articles within the last {max_age_days} day(s)"
+            )
 
         known = await existing_news_ids(engine)
         new_entries = [e for e in entries if e["news_id"] not in known]

@@ -1,10 +1,12 @@
 import json
 import os
+from datetime import datetime
 
 from nhk_easy.flows.daily_fetch import (
     article_url,
     entry_to_article,
     extract_video_m3u8,
+    filter_recent,
 )
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -38,6 +40,18 @@ def test_extract_video_m3u8():
     )
     assert extract_video_m3u8(None) is None
     assert extract_video_m3u8("") is None
+
+
+def test_filter_recent():
+    entries = [
+        {"news_id": "a", "news_prearranged_time": "2026-06-11 20:00:00"},
+        {"news_id": "b", "news_prearranged_time": "2026-06-01 20:00:00"},
+        {"news_id": "c"},  # no timestamp: dropped when filtering
+    ]
+    now = datetime(2026, 6, 12, 9, 0)
+    assert [e["news_id"] for e in filter_recent(entries, 1, now)] == ["a"]
+    assert [e["news_id"] for e in filter_recent(entries, 30, now)] == ["a", "b"]
+    assert filter_recent(entries, None, now) == entries
 
 
 def test_entry_to_article_from_fixture():
