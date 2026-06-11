@@ -19,11 +19,18 @@ from nhk_easy.browser import (
     EASY_TOP_URL,
     build_browser_config,
     fetch_article_html,
+    fetch_binary_in_page,
     fetch_media_token,
     fetch_news_list,
     open_easy_top,
 )
-from nhk_easy.db import create_engine, existing_news_ids, init_db, upsert_article
+from nhk_easy.db import (
+    articles_with_image_urls,
+    create_engine,
+    existing_news_ids,
+    init_db,
+    upsert_article,
+)
 from nhk_easy.models import Article
 from nhk_easy.parser import parse_article
 from nhk_easy.prefect_settings import DEFAULT_SETTINGS_BLOCK, resolve_settings
@@ -59,6 +66,28 @@ def filter_recent(
         if raw and datetime.strptime(raw, "%Y-%m-%d %H:%M:%S") >= cutoff:
             kept.append(entry)
     return kept
+
+
+def image_dest_path(settings: Settings, news_id: str, image_url: str) -> str:
+    ext = os.path.splitext(urlparse(image_url).path)[1] or ".jpg"
+    return os.path.join(settings.images_dir, f"{news_id}{ext}")
+
+
+async def download_image(
+    crawler: AsyncWebCrawler, settings: Settings, news_id: str, image_url: str
+) -> str | None:
+    """Save the article image locally via the browser session. Idempotent;
+    returns the local path or None when the image is unavailable."""
+    dest = image_dest_path(settings, news_id, image_url)
+    if os.path.exists(dest) and os.path.getsize(dest) > 0:
+        return dest
+    data = await fetch_binary_in_page(crawler, image_url)
+    if not data:
+        return None
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    with open(dest, "wb") as f:
+        f.write(data)
+    return dest
 
 
 def entry_to_article(entry: dict) -> Article:
@@ -113,6 +142,14 @@ async def process_article(
     else:
         logger.warning(f"{article.news_id} has no narration audio")
 
+    if article.image_url:
+        # Images sit behind the same JWT gateway as the JSON endpoints;
+        # store them locally so the reader can serve them. Non-fatal.
+        if not await download_image(
+            crawler, settings, article.news_id, article.image_url
+        ):
+            logger.warning(f"{article.news_id}: image not downloadable")
+
     await upsert_article(engine, article)
     return article.news_id
 
@@ -122,8 +159,9 @@ async def daily_fetch(
     limit: int | None = None,
     settings_block_name: str = DEFAULT_SETTINGS_BLOCK,
     max_age_days: int | None = None,
+    backfill_images: bool = False,
 ) -> list[str]:
-    """Fetch all new articles (text + audio) into PostgreSQL.
+    """Fetch all new articles (text + audio + image) into PostgreSQL.
 
     Args:
         limit: Process at most this many new articles (small-scale validation).
@@ -131,6 +169,8 @@ async def daily_fetch(
             (MiraiGuard pattern). Pass "" to use .env/env vars instead.
         max_age_days: Only process articles published within this many days
             (None = no age filter; dedup against the DB still applies).
+        backfill_images: Also download images for already-stored articles
+            that are missing their local image file.
     """
     logger = get_run_logger()
     settings = await resolve_settings(settings_block_name)
@@ -162,6 +202,20 @@ async def daily_fetch(
 
         for entry in new_entries:
             saved.append(await process_article(crawler, settings, engine, entry))
+
+        if backfill_images:
+            rows = await articles_with_image_urls(engine)
+            missing = [
+                (news_id, url)
+                for news_id, url in rows
+                if not os.path.exists(image_dest_path(settings, news_id, url))
+            ]
+            logger.info(f"Image backfill: {len(missing)} of {len(rows)} missing")
+            done = 0
+            for news_id, url in missing:
+                if await download_image(crawler, settings, news_id, url):
+                    done += 1
+            logger.info(f"Image backfill: downloaded {done}/{len(missing)}")
 
     logger.info(f"Done: {len(saved)} articles saved")
     return saved

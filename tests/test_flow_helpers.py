@@ -7,7 +7,9 @@ from nhk_easy.flows.daily_fetch import (
     entry_to_article,
     extract_video_m3u8,
     filter_recent,
+    image_dest_path,
 )
+from nhk_easy.settings import Settings
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -52,6 +54,13 @@ def test_filter_recent():
     assert [e["news_id"] for e in filter_recent(entries, 1, now)] == ["a"]
     assert [e["news_id"] for e in filter_recent(entries, 30, now)] == ["a", "b"]
     assert filter_recent(entries, None, now) == entries
+
+
+def test_image_dest_path():
+    s = Settings(DATA_DIR="/data/nhk")
+    url = "https://news.web.nhk/news/html/20250612/K10014832161_01.jpg"
+    assert image_dest_path(s, "ne1", url) == "/data/nhk/images/ne1.jpg"
+    assert image_dest_path(s, "ne2", "https://x/no-ext") == "/data/nhk/images/ne2.jpg"
 
 
 def test_entry_to_article_from_fixture():

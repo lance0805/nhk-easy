@@ -44,3 +44,7 @@ class Settings(BaseSettings):
     @property
     def audio_dir(self) -> str:
         return os.path.join(self.DATA_DIR, "audio")
+
+    @property
+    def images_dir(self) -> str:
+        return os.path.join(self.DATA_DIR, "images")

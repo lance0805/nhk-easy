@@ -56,6 +56,18 @@ const res = await fetch({url!r}, {{credentials: 'include'}});
 return {{status: res.status, body: await res.text()}};
 """
 
+_FETCH_BINARY_JS_TEMPLATE = """
+const res = await fetch({url!r}, {{credentials: 'include'}});
+if (res.status !== 200) return {{status: res.status, b64: ''}};
+const bytes = new Uint8Array(await res.arrayBuffer());
+let bin = '';
+const chunk = 0x8000;
+for (let i = 0; i < bytes.length; i += chunk) {{
+  bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+}}
+return {{status: 200, b64: btoa(bin)}};
+"""
+
 
 def build_browser_config(settings: Settings) -> BrowserConfig:
     proxy_config = None
@@ -135,6 +147,29 @@ async def fetch_media_token(crawler: AsyncWebCrawler) -> str:
     """Get an Akamai `hdnts` token for media.vd.st.nhk downloads."""
     data = await _fetch_json_in_page(crawler, MEDIA_TOKEN_URL)
     return data["token"]
+
+
+async def fetch_binary_in_page(crawler: AsyncWebCrawler, url: str) -> bytes | None:
+    """Fetch a binary resource (e.g. article image) inside the page session.
+
+    NHK images live behind the same JWT gateway as the JSON endpoints
+    (anonymous requests get 401), so they must be fetched with the page's
+    credentials. Returns None when the resource is not accessible.
+    """
+    import base64
+
+    js = _FETCH_BINARY_JS_TEMPLATE.format(url=url)
+    result = await crawler.arun(
+        EASY_TOP_URL,
+        config=_run_config(js_code=[js], js_only=True),
+    )
+    payload = result.js_execution_result
+    if isinstance(payload, dict) and "results" in payload:
+        payload = payload["results"][0]
+    if not isinstance(payload, dict) or payload.get("status") != 200:
+        logger.warning(f"binary fetch failed for {url}: {payload!r}")
+        return None
+    return base64.b64decode(payload["b64"])
 
 
 async def fetch_article_html(crawler: AsyncWebCrawler, url: str) -> str:

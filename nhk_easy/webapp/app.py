@@ -46,6 +46,16 @@ async def article_list(request: Request):
     )
 
 
+def _local_image_path(news_id: str) -> str | None:
+    """Path of the locally downloaded article image, if present."""
+    import glob
+
+    if not news_id.replace("_", "").isalnum():  # path-safety for the glob
+        return None
+    matches = glob.glob(os.path.join(settings.images_dir, f"{news_id}.*"))
+    return matches[0] if matches else None
+
+
 @app.get("/article/{news_id}", response_class=HTMLResponse)
 async def article_detail(request: Request, news_id: str):
     async with AsyncSession(engine) as session:
@@ -53,8 +63,18 @@ async def article_detail(request: Request, news_id: str):
     if article is None:
         raise HTTPException(status_code=404, detail="article not found")
     return templates.TemplateResponse(
-        request, "detail.html", {"article": article}
+        request,
+        "detail.html",
+        {"article": article, "has_image": _local_image_path(news_id) is not None},
     )
+
+
+@app.get("/image/{news_id}")
+async def article_image(news_id: str):
+    path = _local_image_path(news_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail="image not found")
+    return FileResponse(path)
 
 
 @app.get("/audio/{news_id}")

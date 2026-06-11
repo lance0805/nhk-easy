@@ -8,8 +8,8 @@
   {% if article.audio_path %}
     <audio controls preload="none" src="/audio/{{ article.news_id }}"></audio>
   {% endif %}
-  {% if article.image_url %}
-    <img class="article-image" src="{{ article.image_url }}" alt="">
+  {% if has_image %}
+    <img class="article-image" src="/image/{{ article.news_id }}" alt="">
   {% endif %}
   <div class="article-body">{{ article.body_html | safe }}</div>
   <p><a href="{{ article.url }}" target="_blank" rel="noopener">原文 ↗</a></p>

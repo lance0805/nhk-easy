@@ -22,6 +22,17 @@ async def existing_news_ids(engine: AsyncEngine) -> set[str]:
         return set(result.all())
 
 
+async def articles_with_image_urls(engine: AsyncEngine) -> list[tuple[str, str]]:
+    """(news_id, image_url) for all articles that reference a remote image."""
+    async with AsyncSession(engine) as session:
+        result = await session.exec(
+            select(Article.news_id, Article.image_url).where(
+                Article.image_url.is_not(None), Article.image_url != ""
+            )
+        )
+        return list(result.all())
+
+
 async def upsert_article(engine: AsyncEngine, article: Article) -> None:
     values = article.model_dump()
     stmt = insert(Article).values(**values)
