@@ -6,7 +6,49 @@
     <p class="article-date">{{ article.published_at.strftime("%Y年%m月%d日 %H:%M") }}</p>
   {% endif %}
   {% if article.audio_path %}
-    <audio controls preload="none" src="/audio/{{ article.news_id }}"></audio>
+    <audio id="player" controls preload="none" src="/audio/{{ article.news_id }}"></audio>
+    <div class="loop-control">
+      くり返し
+      <input type="number" id="loop-count" min="1" max="999">
+      回
+      <span id="loop-progress"></span>
+    </div>
+    <script>
+      (function () {
+        const player = document.getElementById("player");
+        const countInput = document.getElementById("loop-count");
+        const progress = document.getElementById("loop-progress");
+        const KEY = "nhk-easy-loop-count";
+        const DEFAULT_LOOPS = 20;
+
+        countInput.value = parseInt(localStorage.getItem(KEY), 10) || DEFAULT_LOOPS;
+        countInput.addEventListener("change", function () {
+          const v = Math.max(1, parseInt(countInput.value, 10) || DEFAULT_LOOPS);
+          countInput.value = v;
+          localStorage.setItem(KEY, v);
+        });
+
+        let played = 0;
+        function showProgress() {
+          progress.textContent = played + " / " + countInput.value;
+        }
+        player.addEventListener("play", function () {
+          // Restart the cycle when playing again after all loops finished.
+          if (played >= parseInt(countInput.value, 10)) {
+            played = 0;
+          }
+          if (played === 0) showProgress();
+        });
+        player.addEventListener("ended", function () {
+          played += 1;
+          showProgress();
+          if (played < parseInt(countInput.value, 10)) {
+            player.currentTime = 0;
+            player.play();
+          }
+        });
+      })();
+    </script>
   {% endif %}
   {% if has_image %}
     <img class="article-image" src="/image/{{ article.news_id }}" alt="">
