@@ -80,10 +80,15 @@ Idempotent: re-running never duplicates rows or re-downloads existing audio.
 
 ## Deployment
 
-- `prefect.yaml` (declarative, like MiraiGuard's): deployment
-  `fetch-nhk-easy-daily`, entrypoint `nhk_easy/flows/daily_fetch.py:daily_fetch`,
-  cron `0 21 * * *` Asia/Tokyo (after the evening article batch ~20:00),
-  work pool `default`. Deploy: `uv run prefect deploy --all`.
+- `multi-deploy.py` (programmatic, mirrors MiraiGuard's multi-deploy.py):
+  `deploy()` with `DockerImage(name="nhk-easy:latest", dockerfile="Dockerfile",
+  pull=False)`, `push=False`, work pool `local-pool`. Deployment
+  `fetch-nhk-easy-daily` runs daily at 21:00 Asia/Tokyo (after the evening
+  article batch ~20:00) with `settings_block_name=nhk-easy-settings-secret`.
+  `COMMON_JOB_VARS` sets `image_pull_policy: Never`, the in-docker
+  `PREFECT_API_URL`, and bind-mounts `<repo>/.chromium-docker:/data/chromium`
+  (container-owned browser profile) and `<repo>/data:/data/nhk`.
+  Deploy: `uv run python multi-deploy.py` on the worker host.
 
 ## System dependencies
 

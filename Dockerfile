@@ -44,7 +44,6 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 RUN uv run playwright install chromium
 
-COPY prefect.yaml .prefectignore ./
 COPY nhk_easy ./nhk_easy
 
 # Keep mutable state (browser profile, downloaded audio) outside /app so it

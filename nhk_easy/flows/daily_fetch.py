@@ -1,7 +1,7 @@
 """Daily NHK News Web Easy fetch flow.
 
 Run locally:  uv run python -m nhk_easy.flows.daily_fetch
-Deploy:       uv run prefect deploy --all   (see prefect.yaml)
+Deploy:       uv run python multi-deploy.py   (builds image + registers deployment)
 """
 
 import asyncio

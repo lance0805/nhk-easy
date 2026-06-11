@@ -7,6 +7,7 @@ __pycache__/
 data/
 downloads/
 .chromium/
+.chromium-docker/
 *.egg-info/
 dist/
 .DS_Store
