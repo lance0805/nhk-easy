@@ -10,7 +10,6 @@ from the repo root (browser profile, downloaded audio).
 """
 
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from prefect import deploy
 from prefect.client.schemas.schedules import IntervalSchedule
@@ -18,11 +17,13 @@ from prefect.docker import DockerImage
 
 from nhk_easy.flows.daily_fetch import daily_fetch
 
-# Repository root on the host. Used to bind-mount writable dirs into flow
-# run containers without placing them under /app, which Prefect's workspace
-# resolver copies to /tmp before each run.
-_REPO_ROOT = Path(__file__).resolve().parent
-
+# Volume mounts are NOT set here: the nhk-easy-pool work pool's base job
+# template provides the defaults (<repo>/.chromium-docker:/data/chromium and
+# <repo>/data:/data/nhk on the worker host). The browser profile dir is kept
+# separate from any host-run .chromium profile: a profile created by macOS
+# Chromium is unusable inside the Linux container (cookies are encrypted via
+# the OS keychain); the container passes the NHK consent gate itself on
+# first run and the profile persists afterwards.
 COMMON_JOB_VARS = {
     "image_pull_policy": "Never",
     "env": {
@@ -35,15 +36,6 @@ COMMON_JOB_VARS = {
         "PROFILE_DIR": "/data/chromium",
         "DATA_DIR": "/data/nhk",
     },
-    "volumes": [
-        # Kept separate from the host-run .chromium profile: a profile
-        # created by macOS Chromium is unusable inside the Linux container
-        # (cookies are encrypted via the OS keychain). The container passes
-        # the NHK consent gate itself on first run and the profile persists
-        # in this directory afterwards.
-        f"{_REPO_ROOT}/.chromium-docker:/data/chromium",
-        f"{_REPO_ROOT}/data:/data/nhk",
-    ],
 }
 
 
@@ -74,5 +66,5 @@ if __name__ == "__main__":
             pull=False,
         ),
         push=False,
-        work_pool_name="local-pool",
+        work_pool_name="nhk-easy-pool",
     )
