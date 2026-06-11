@@ -1,0 +1,19 @@
+# Web reader only. The fetch flow is deployed separately via multi-deploy.py.
+#
+# Setup: put POSTGRES_* into .env (see .env.example), then:
+#   docker compose up -d
+# Reader at http://<host>:8000
+services:
+  reader:
+    build: .
+    image: nhk-easy:latest
+    container_name: nhk-easy-reader
+    env_file: .env
+    volumes:
+      # Audio files written by the fetch flow (data/audio/*.m4a). Must be on
+      # the same machine as the reader for /audio/{id} to serve files.
+      - ./data:/data/nhk
+    ports:
+      - "8000:8000"
+    command: ["uv", "run", "uvicorn", "nhk_easy.webapp.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped

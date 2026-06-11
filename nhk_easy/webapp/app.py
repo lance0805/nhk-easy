@@ -4,6 +4,7 @@ Run: uv run uvicorn nhk_easy.webapp.app:app
 """
 
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
@@ -11,14 +12,23 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from nhk_easy.db import create_engine
+from nhk_easy.db import create_engine, init_db
 from nhk_easy.models import Article
 from nhk_easy.settings import Settings
 
 settings = Settings()
 engine = create_engine(settings)
 
-app = FastAPI(title="nhk-easy reader")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create tables on startup so the reader works before the first
+    # fetch flow run (empty list instead of a missing-relation error).
+    await init_db(engine)
+    yield
+
+
+app = FastAPI(title="nhk-easy reader", lifespan=lifespan)
 templates = Jinja2Templates(
     directory=os.path.join(os.path.dirname(__file__), "templates")
 )
