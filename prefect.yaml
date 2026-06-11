@@ -11,7 +11,8 @@ deployments:
   - name: fetch-nhk-easy-daily
     description: "Daily download of NHK News Web Easy articles (text + furigana + audio)."
     entrypoint: nhk_easy/flows/daily_fetch.py:daily_fetch
-    parameters: {}
+    parameters:
+      settings_block_name: nhk-easy-settings-secret
     schedules:
       - cron: "0 21 * * *"
         timezone: "Asia/Tokyo"

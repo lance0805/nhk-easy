@@ -26,6 +26,7 @@ from nhk_easy.browser import (
 from nhk_easy.db import create_engine, existing_news_ids, init_db, upsert_article
 from nhk_easy.models import Article
 from nhk_easy.parser import parse_article
+from nhk_easy.prefect_settings import DEFAULT_SETTINGS_BLOCK, resolve_settings
 from nhk_easy.settings import Settings
 
 _NEWS_ID_RE = re.compile(r"^ne\d+")
@@ -100,14 +101,23 @@ async def process_article(
 
 
 @flow(name="nhk-easy-daily-fetch")
-async def daily_fetch(limit: int | None = None) -> list[str]:
+async def daily_fetch(
+    limit: int | None = None,
+    settings_block_name: str = DEFAULT_SETTINGS_BLOCK,
+) -> list[str]:
     """Fetch all new articles (text + audio) into PostgreSQL.
 
     Args:
         limit: Process at most this many new articles (small-scale validation).
+        settings_block_name: Prefect Secret block holding the JSON config
+            (MiraiGuard pattern). Pass "" to use .env/env vars instead.
     """
     logger = get_run_logger()
-    settings = Settings()
+    settings = await resolve_settings(settings_block_name)
+    logger.info(
+        f"Settings: postgres={settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}"
+        f"/{settings.POSTGRES_DATABASE}, proxy={settings.HTTP_PROXY_URL or 'off'}"
+    )
     engine = create_engine(settings)
     await init_db(engine)
 

@@ -29,28 +29,46 @@ uv run prefect deploy --all
 uv run uvicorn nhk_easy.webapp.app:app
 ```
 
+## Configuration via Prefect Secret block
+
+Like MiraiGuard, runtime config lives in a Prefect Secret block
+(default name `nhk-easy-settings-secret`) holding one JSON document:
+
+```json
+{
+  "postgres": {"host": "...", "port": 5432, "user": "...",
+               "password": "...", "database": "nhk_easy"},
+  "http_proxy_url": "",
+  "directories": {"data_dir": "/data/nhk", "profile_dir": "/data/chromium"}
+}
+```
+
+The postgres section can be copied from the `miraiguard-settings-secret`
+block (set `database` to nhk-easy's own database). The flow falls back to
+`.env`/env vars when the block is missing or when
+`settings_block_name=""` is passed (local development).
+
 ## Docker
 
 ```bash
-docker compose build fetcher        # build the runtime image (nhk-easy:latest)
-docker compose up -d postgres       # database
+docker build -t nhk-easy .
 
-# One-off fetch run (first run passes the consent gate automatically;
-# the browser profile persists in the named volume "chromium")
-docker compose run --rm fetcher
-
-# Web reader at http://127.0.0.1:8000
-docker compose --profile reader up -d reader
+# One-off fetch run. First run passes the NHK consent gate automatically;
+# keep the browser profile in a named volume so it only happens once.
+docker run --rm \
+  -v nhk-easy-chromium:/data/chromium \
+  -v nhk-easy-data:/data/nhk \
+  -e PREFECT_API_URL=... -e PREFECT_API_KEY=... \
+  --shm-size 1g \
+  nhk-easy
 ```
 
-Audio files land in `./data/audio/` (bind-mounted as `/data/nhk` in the
-container). Note: the container keeps its own browser profile in a named
-volume - a macOS host profile cannot be reused on Linux because Chromium
-encrypts cookies with the OS keychain.
-
-For Prefect-scheduled runs, point a docker-type work pool at the
-`nhk-easy:latest` image with the same environment and volumes as the
-`fetcher` service.
+Audio files land in `/data/nhk/audio` (the `nhk-easy-data` volume). For
+Prefect-scheduled runs, point a docker-type work pool at the `nhk-easy`
+image with the same volumes, plus `--shm-size 1g` (Chromium needs more
+shared memory than the 64MB docker default). Note: the container keeps its
+own browser profile - a macOS host profile cannot be reused on Linux
+because Chromium encrypts cookies with the OS keychain.
 
 ## Tests
 

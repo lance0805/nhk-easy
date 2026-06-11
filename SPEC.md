@@ -53,6 +53,11 @@ Idempotent: re-running never duplicates rows or re-downloads existing audio.
 - `nhk_easy/settings.py` - pydantic-settings, `.env` file. Fields: `POSTGRES_*`,
   `HTTP_PROXY_URL` (optional, both browser and httpx honor it - mirrors
   MiraiGuard), `PROFILE_DIR`, `DATA_DIR`, `RUN_IN_DOCKER`.
+- `nhk_easy/prefect_settings.py` - production config comes from a Prefect
+  Secret block (default `nhk-easy-settings-secret`) holding a JSON document
+  with postgres / http_proxy_url / directories sections (MiraiGuard pattern;
+  the postgres section mirrors `miraiguard-settings-secret`). The flow takes
+  `settings_block_name` and falls back to env vars when empty or missing.
 - `nhk_easy/models.py` - SQLModel table `articles`: `news_id` (PK), `title`,
   `published_at`, `url`, `genre` (nullable, site-provided), `body_html`,
   `body_text`, `body_text_ruby`, `image_url`, `video_m3u8`, `audio_voice_id`,
