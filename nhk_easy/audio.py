@@ -44,8 +44,12 @@ async def download_audio(
     cmd += [
         "-user_agent", settings.USER_AGENT,
         "-i", url,
-        "-c", "copy",
-        "-bsf:a", "aac_adtstoasc",
+        # The source is HE-AAC (mp4a.40.5); stream-copying it into MP4 via
+        # aac_adtstoasc produces files that ffprobe accepts but real decoders
+        # cannot play past the first HLS segment (browsers stop after ~6s).
+        # Re-encode to plain AAC-LC instead.
+        "-c:a", "aac",
+        "-b:a", "64k",
         tmp_path,
     ]
 

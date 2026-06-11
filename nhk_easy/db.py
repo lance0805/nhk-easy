@@ -33,6 +33,17 @@ async def articles_with_image_urls(engine: AsyncEngine) -> list[tuple[str, str]]
         return list(result.all())
 
 
+async def articles_with_audio(engine: AsyncEngine) -> list[tuple[str, str]]:
+    """(news_id, audio_voice_id) for all articles that have narration audio."""
+    async with AsyncSession(engine) as session:
+        result = await session.exec(
+            select(Article.news_id, Article.audio_voice_id).where(
+                Article.audio_voice_id.is_not(None), Article.audio_voice_id != ""
+            )
+        )
+        return list(result.all())
+
+
 async def upsert_article(engine: AsyncEngine, article: Article) -> None:
     values = article.model_dump()
     stmt = insert(Article).values(**values)

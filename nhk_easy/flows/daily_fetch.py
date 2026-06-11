@@ -25,6 +25,7 @@ from nhk_easy.browser import (
     open_easy_top,
 )
 from nhk_easy.db import (
+    articles_with_audio,
     articles_with_image_urls,
     create_engine,
     existing_news_ids,
@@ -160,6 +161,7 @@ async def daily_fetch(
     settings_block_name: str = DEFAULT_SETTINGS_BLOCK,
     max_age_days: int | None = None,
     backfill_images: bool = False,
+    backfill_audio: bool = False,
 ) -> list[str]:
     """Fetch all new articles (text + audio + image) into PostgreSQL.
 
@@ -171,6 +173,8 @@ async def daily_fetch(
             (None = no age filter; dedup against the DB still applies).
         backfill_images: Also download images for already-stored articles
             that are missing their local image file.
+        backfill_audio: Also download audio for already-stored articles
+            that are missing their local audio file.
     """
     logger = get_run_logger()
     settings = await resolve_settings(settings_block_name)
@@ -202,6 +206,27 @@ async def daily_fetch(
 
         for entry in new_entries:
             saved.append(await process_article(crawler, settings, engine, entry))
+
+        if backfill_audio:
+            rows = await articles_with_audio(engine)
+            missing = [
+                (news_id, voice_uri)
+                for news_id, voice_uri in rows
+                if not os.path.exists(
+                    os.path.join(settings.audio_dir, f"{news_id}.m4a")
+                )
+            ]
+            logger.info(f"Audio backfill: {len(missing)} of {len(rows)} missing")
+            done = 0
+            for news_id, voice_uri in missing:
+                token = await fetch_media_token(crawler)
+                dest = os.path.join(settings.audio_dir, f"{news_id}.m4a")
+                try:
+                    await download_audio(settings, voice_uri, token, dest)
+                    done += 1
+                except Exception as e:
+                    logger.warning(f"Audio backfill failed for {news_id}: {e}")
+            logger.info(f"Audio backfill: downloaded {done}/{len(missing)}")
 
         if backfill_images:
             rows = await articles_with_image_urls(engine)
