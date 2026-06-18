@@ -1,0 +1,607 @@
+/* NHK Easy Reader - modern magazine theme.
+   Zero-build vanilla CSS. Light/dark via prefers-color-scheme + [data-theme]. */
+
+/* ---------- Design tokens ---------- */
+:root {
+  color-scheme: light;
+
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #fafbfc;
+  --text: #16181d;
+  --text-muted: #646b76;
+  --border: #e6e8ec;
+  --border-strong: #d3d7dd;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-contrast: #ffffff;
+  --ring: #2563eb;
+  --rt: #6b7280;            /* furigana color */
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.10), 0 2px 4px rgba(16, 24, 40, 0.06);
+
+  /* NHK word-class highlight backgrounds */
+  --color1: #ffe1e1;
+  --color2: #e1f0ff;
+  --color3: #e6ffe1;
+  --color4: #fff3d6;
+
+  --maxw-reader: 44rem;
+  --maxw-app: 76rem;
+  --radius: 14px;
+  --radius-sm: 9px;
+  --space: 1rem;
+  --font-scale: 1;
+  --line: 2.1;
+
+  --font-sans: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP",
+    "Yu Gothic", Meiryo, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Dark tokens shared by explicit toggle and (when not forced light) system pref. */
+:root[data-theme="dark"],
+:root.theme-dark {
+  color-scheme: dark;
+  --bg: #0e1014;
+  --surface: #171a21;
+  --surface-2: #1c2029;
+  --text: #e7e9ee;
+  --text-muted: #98a1b0;
+  --border: #262b35;
+  --border-strong: #333a47;
+  --accent: #60a5fa;
+  --accent-hover: #7db4fb;
+  --accent-contrast: #0e1014;
+  --ring: #60a5fa;
+  --rt: #9aa3b2;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.5);
+  --color1: #4a2730;
+  --color2: #233a52;
+  --color3: #28432a;
+  --color4: #4a3d1f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0e1014;
+    --surface: #171a21;
+    --surface-2: #1c2029;
+    --text: #e7e9ee;
+    --text-muted: #98a1b0;
+    --border: #262b35;
+    --border-strong: #333a47;
+    --accent: #60a5fa;
+    --accent-hover: #7db4fb;
+    --accent-contrast: #0e1014;
+    --ring: #60a5fa;
+    --rt: #9aa3b2;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.5);
+    --color1: #4a2730;
+    --color2: #233a52;
+    --color3: #28432a;
+    --color4: #4a3d1f;
+  }
+}
+
+/* ---------- Base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  font-size: calc(100% * var(--font-scale));
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: var(--line);
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+img { max-width: 100%; height: auto; }
+
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -3rem;
+  z-index: 100;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-sm);
+  transition: top 0.15s ease;
+}
+.skip-link:focus { top: 0.5rem; }
+
+/* ---------- Header ---------- */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  backdrop-filter: saturate(160%) blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.app-header__inner {
+  max-width: var(--maxw-app);
+  margin: 0 auto;
+  padding: 0.7rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.brand {
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
+}
+.brand:hover { text-decoration: none; color: var(--text); }
+.brand span { color: var(--accent); }
+.toolbar {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* Icon buttons */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+.icon-btn:active { transform: translateY(1px); }
+.icon-btn[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.icon-btn svg { width: 1.15rem; height: 1.15rem; }
+
+.font-controls { display: inline-flex; align-items: center; }
+
+/* ---------- Layout ---------- */
+main {
+  max-width: var(--maxw-app);
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 4rem 1rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.empty-state code {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 0.1rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+
+/* ---------- Search ---------- */
+.list-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+.search {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.search input {
+  width: 100%;
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 0.6rem 0.9rem 0.6rem 2.4rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.search input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.search__icon {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  width: 1.05rem;
+  height: 1.05rem;
+  pointer-events: none;
+}
+.list-count {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- Card grid ---------- */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1.1rem;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  min-width: 0;
+  /* Skip rendering off-screen cards: large lists (hundreds of articles)
+     stay cheap to paint and scroll. The browser remembers measured sizes. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 340px;
+}
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
+.card:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.card.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.card__media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--accent) 22%, var(--surface-2)),
+    var(--surface-2));
+  overflow: hidden;
+}
+/* Thumbnail sits on top of the placeholder; fades in on load, hidden on error
+   (JS removes it) so the letter placeholder shows through when there is no image. */
+.card__media img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: var(--surface-2);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.card__media img.is-loaded { opacity: 1; }
+.card__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--accent) 70%, var(--text));
+  opacity: 0.65;
+}
+.card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem 1.05rem;
+  flex: 1;
+}
+.card__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.55;
+  color: var(--text);
+  text-wrap: balance;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card__title a { color: inherit; }
+.card__title a::after { content: ""; position: absolute; inset: 0; } /* full-card hit target */
+.card__title a:hover { text-decoration: none; }
+.card__meta {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.card { position: relative; }
+
+/* Read / unread marks */
+.card.is-read .card__media { opacity: 0.55; }
+.card.is-read .card__title { color: var(--text-muted); font-weight: 600; }
+.read-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+.card.is-read .read-dot { background: var(--border-strong); }
+
+.no-results {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--text-muted);
+  padding: 3rem 1rem;
+}
+
+/* ---------- Reading view ---------- */
+.reader { max-width: var(--maxw-reader); margin: 0 auto; }
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 1.25rem;
+}
+.back-link:hover { color: var(--accent); text-decoration: none; }
+.article-title {
+  font-size: clamp(1.5rem, 1.2rem + 1.5vw, 2.1rem);
+  font-weight: 800;
+  line-height: 1.7;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  margin: 0 0 0.6rem;
+}
+.article-date {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 0 0 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.article-body { line-height: var(--line); font-size: 1.08rem; }
+.article-body p { margin: 1.1rem 0; }
+.article-image {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin: 0.5rem 0 1.5rem;
+}
+rt {
+  font-size: 0.55em;
+  color: var(--rt);
+  font-weight: 400;
+  user-select: none;
+}
+/* Furigana toggle */
+:root[data-furigana="off"] rt { visibility: hidden; }
+
+/* Word-class coloring */
+.color1 { background-color: var(--color1); border-radius: 3px; }
+.color2 { background-color: var(--color2); border-radius: 3px; }
+.color3 { background-color: var(--color3); border-radius: 3px; }
+.color4 { background-color: var(--color4); border-radius: 3px; }
+
+.source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 2rem;
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+.source-link:hover { color: var(--accent); border-color: var(--accent); background: var(--surface); text-decoration: none; }
+
+/* ---------- Audio player (Plyr-enhanced) ---------- */
+.player-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem 1.1rem;
+  margin-bottom: 1.75rem;
+  box-shadow: var(--shadow-sm);
+}
+/* Theme Plyr to match the app (accent + surfaces + radius). */
+.player-card .plyr {
+  --plyr-color-main: var(--accent);
+  --plyr-audio-control-color: var(--text-muted);
+  --plyr-audio-control-color-hover: var(--accent-contrast);
+  --plyr-audio-controls-background: transparent;
+  --plyr-range-track-height: 6px;
+  --plyr-range-thumb-shadow: var(--shadow-sm);
+  --plyr-font-family: var(--font-sans);
+  border-radius: var(--radius-sm);
+}
+/* With JS on, hide the native audio (Plyr renders its own UI) to avoid a flash
+   of native controls. With JS off, native controls remain as a fallback. */
+.js .player-card audio { display: none; }
+
+.loop-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-top: 0.9rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+.loop-control input {
+  width: 4.5em;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.25rem 0.45rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.loop-control input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+#loop-progress {
+  margin-left: auto;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* ---------- Reading progress bar ---------- */
+.progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  background: var(--accent);
+  z-index: 40;
+  will-change: transform;
+}
+
+/* ---------- Shortcut help overlay ---------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(10, 12, 16, 0.55);
+  overscroll-behavior: contain;
+}
+.overlay[open], .overlay.is-open { display: flex; }
+.overlay__panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  width: min(28rem, 100%);
+  max-height: 85vh;
+  overflow: auto;
+  padding: 1.4rem 1.5rem;
+}
+.overlay__panel h2 { margin: 0 0 1rem; font-size: 1.15rem; }
+.kbd-list { display: grid; gap: 0.55rem; }
+.kbd-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-size: 0.9rem; }
+.kbd-row span:last-child { color: var(--text-muted); text-align: right; }
+kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  padding: 0.1rem 0.45rem;
+  color: var(--text);
+}
+
+/* ---------- Toast (aria-live) ---------- */
+.toast {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(1rem);
+  background: var(--text);
+  color: var(--bg);
+  padding: 0.55rem 1rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 70;
+}
+.toast.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 600px) {
+  main { padding: 1rem 0.85rem 3rem; }
+  .card-grid { grid-template-columns: 1fr; gap: 0.9rem; }
+  .brand { font-size: 1.05rem; }
+  .icon-btn { width: 2.5rem; height: 2.5rem; } /* larger touch target */
+
+  .article-image { margin: 0.25rem 0 1.1rem; }
+
+  /* Player on phones: bigger tap targets, and drop the volume slider so the
+     seek bar gets the width (the device handles volume with its hardware keys). */
+  .player-card { padding: 0.85rem 0.9rem 0.95rem; }
+  .player-card .plyr { --plyr-control-spacing: 12px; }
+  .player-card .plyr__control svg { width: 20px; height: 20px; }
+  .player-card .plyr__volume { display: none; }
+  .player-card .plyr__time--duration { display: none; } /* hide duration, keep elapsed */
+  .loop-control { font-size: 0.95rem; }
+  .loop-control input { width: 4em; padding: 0.4rem 0.5rem; } /* easier to tap */
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .card:hover { transform: none; }
+}

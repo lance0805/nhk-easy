@@ -2,12 +2,44 @@
 {% block title %}NHK Easy Reader{% endblock %}
 {% block content %}
   {% if not articles %}
-    <p>No articles yet. Run the fetch flow first.</p>
-  {% endif %}
-  {% for a in articles %}
-    <div class="article-item">
-      {% if a.published_at %}<time>{{ a.published_at.strftime("%Y-%m-%d %H:%M") }}</time>{% endif %}
-      <a href="/article/{{ a.news_id }}">{{ a.title_with_ruby | safe if a.title_with_ruby else a.title }}</a>
+    <div class="empty-state">
+      <p>記事がまだありません。</p>
+      <p>まず取得フローを実行してください: <code>uv run python -m nhk_easy.flows</code></p>
     </div>
-  {% endfor %}
+  {% else %}
+    <div class="list-tools">
+      <div class="search">
+        <svg class="search__icon" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/>
+        </svg>
+        <input type="search" id="search-input" name="q" placeholder="記事を検索…  ( / )"
+               autocomplete="off" spellcheck="false" aria-label="記事を検索" enterkeyhint="search">
+      </div>
+      <span class="list-count" id="list-count" aria-live="polite"></span>
+    </div>
+
+    <div class="card-grid" id="card-grid">
+      {% for a in articles %}
+        <article class="card" data-id="{{ a.news_id }}" data-title="{{ a.title }}">
+          <div class="card__media">
+            <span class="card__placeholder" aria-hidden="true">{{ a.title[:1] }}</span>
+            <img src="/image/{{ a.news_id }}" alt="" loading="lazy" width="320" height="180" data-thumb>
+          </div>
+          <div class="card__body">
+            <h2 class="card__title">
+              <a href="/article/{{ a.news_id }}">{{ a.title_with_ruby | safe if a.title_with_ruby else a.title }}</a>
+            </h2>
+            <div class="card__meta">
+              <span class="read-dot" aria-hidden="true"></span>
+              {% if a.genre %}<span class="badge" translate="no">{{ a.genre }}</span>{% endif %}
+              {% if a.published_at %}
+                <time datetime="{{ a.published_at.isoformat() }}">{{ a.published_at.strftime("%Y-%m-%d") }}</time>
+              {% endif %}
+            </div>
+          </div>
+        </article>
+      {% endfor %}
+      <p class="no-results" id="no-results" hidden>一致する記事がありません。</p>
+    </div>
+  {% endif %}
 {% endblock %}

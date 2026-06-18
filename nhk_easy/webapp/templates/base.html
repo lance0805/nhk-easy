@@ -2,43 +2,89 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e1014" media="(prefers-color-scheme: dark)">
   <title>{% block title %}NHK Easy Reader{% endblock %}</title>
-  <style>
-    body {
-      font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 1rem;
-      line-height: 2.2;
-      color: #222;
-    }
-    a { color: #0a58ca; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    header { border-bottom: 2px solid #0a58ca; margin-bottom: 1.5rem; }
-    header h1 { font-size: 1.3rem; }
-    .article-item { margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.8rem; }
-    .article-item time { color: #888; font-size: 0.85rem; display: block; }
-    .article-title { font-size: 1.4rem; line-height: 2.4; }
-    .article-date { color: #888; font-size: 0.9rem; }
-    .article-body p { margin: 1rem 0; }
-    rt { font-size: 0.55em; color: #555; }
-    audio { width: 100%; margin: 1rem 0 0.3rem; }
-    .loop-control { color: #555; font-size: 0.9rem; margin-bottom: 1rem; }
-    .loop-control input { width: 4em; padding: 0.15rem 0.3rem; font-size: 0.9rem; }
-    #loop-progress { margin-left: 0.6rem; color: #0a58ca; }
-    img.article-image { max-width: 100%; border-radius: 4px; }
-    /* NHK word-class coloring */
-    .color1 { background-color: #ffe1e1; }
-    .color2 { background-color: #e1f0ff; }
-    .color3 { background-color: #e6ffe1; }
-    .color4 { background-color: #fff3d6; }
-  </style>
+  <link rel="stylesheet" href="/static/app.css?v={{ static_v }}">
+  <script>
+    // Apply saved preferences before first paint to avoid a flash.
+    (function () {
+      try {
+        var d = document.documentElement;
+        d.classList.add("js");
+        var theme = localStorage.getItem("nhk-theme");
+        if (theme === "dark" || theme === "light") d.setAttribute("data-theme", theme);
+        if (localStorage.getItem("nhk-furigana") === "off") d.setAttribute("data-furigana", "off");
+        var f = parseFloat(localStorage.getItem("nhk-font-scale"));
+        if (f) d.style.setProperty("--font-scale", String(f));
+      } catch (e) {}
+    })();
+  </script>
+  {% block head_extra %}{% endblock %}
 </head>
 <body>
-  <header>
-    <h1><a href="/">NHK Easy Reader</a></h1>
+  <a class="skip-link" href="#main">本文へスキップ</a>
+
+  <header class="app-header">
+    <div class="app-header__inner">
+      <a class="brand" href="/">NHK <span>Easy</span> Reader</a>
+      <nav class="toolbar" aria-label="表示設定">
+        <button type="button" id="furigana-toggle" class="icon-btn" aria-label="ふりがなの表示切り替え" aria-pressed="false" title="ふりがな (f)">
+          <span aria-hidden="true" style="font-size:0.95rem;font-weight:700">あ<sup style="font-size:0.6em">ぁ</sup></span>
+        </button>
+        <span class="font-controls">
+          <button type="button" id="font-dec" class="icon-btn" aria-label="文字を小さく" title="文字を小さく (-)">
+            <svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 10h10"/></svg>
+          </button>
+          <button type="button" id="font-inc" class="icon-btn" aria-label="文字を大きく" title="文字を大きく (+)">
+            <svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 5v10M5 10h10"/></svg>
+          </button>
+        </span>
+        <button type="button" id="theme-toggle" class="icon-btn" aria-label="ダークモード切り替え" aria-pressed="false" title="テーマ (t)">
+          <svg class="icon-sun" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+            <circle cx="10" cy="10" r="3.5"/><path d="M10 1.5v2M10 16.5v2M1.5 10h2M16.5 10h2M4 4l1.4 1.4M14.6 14.6 16 16M16 4l-1.4 1.4M5.4 14.6 4 16"/>
+          </svg>
+        </button>
+        <button type="button" id="help-toggle" class="icon-btn" aria-label="キーボードショートカット" title="ショートカット (?)">
+          <svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="1.5" y="5" width="17" height="10" rx="2"/><path d="M5 8h.01M8 8h.01M11 8h.01M14 8h.01M5 11h.01M14 11h.01M7.5 11h5"/>
+          </svg>
+        </button>
+      </nav>
+    </div>
   </header>
-  {% block content %}{% endblock %}
+
+  <main id="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Keyboard shortcut help -->
+  <div class="overlay" id="help-overlay" role="dialog" aria-modal="true" aria-labelledby="help-title" aria-hidden="true">
+    <div class="overlay__panel">
+      <h2 id="help-title">キーボードショートカット</h2>
+      <div class="kbd-list">
+        <div class="kbd-row"><span><kbd>t</kbd></span><span>テーマ切り替え</span></div>
+        <div class="kbd-row"><span><kbd>f</kbd></span><span>ふりがな表示切り替え</span></div>
+        <div class="kbd-row"><span><kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd></span><span>文字サイズ</span></div>
+        <div class="kbd-row"><span><kbd>/</kbd></span><span>記事を検索</span></div>
+        <div class="kbd-row"><span><kbd>j</kbd> / <kbd>k</kbd></span><span>記事を選択（一覧）</span></div>
+        <div class="kbd-row"><span><kbd>Enter</kbd> / <kbd>o</kbd></span><span>記事を開く</span></div>
+        <div class="kbd-row"><span><kbd>Space</kbd></span><span>音声 再生／一時停止</span></div>
+        <div class="kbd-row"><span><kbd>←</kbd> / <kbd>→</kbd></span><span>音声 5秒 戻る／進む</span></div>
+        <div class="kbd-row"><span><kbd>[</kbd> / <kbd>]</kbd></span><span>再生速度 おそく／はやく</span></div>
+        <div class="kbd-row"><span><kbd>u</kbd></span><span>一覧へ戻る</span></div>
+        <div class="kbd-row"><span><kbd>?</kbd></span><span>このヘルプ</span></div>
+      </div>
+      <p style="margin:1.2rem 0 0;text-align:right">
+        <button type="button" id="help-close" class="source-link" style="margin:0">閉じる</button>
+      </p>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  {% block vendor_scripts %}{% endblock %}
+  <script src="/static/app.js?v={{ static_v }}" defer></script>
 </body>
 </html>

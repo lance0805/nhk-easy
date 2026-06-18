@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -29,9 +30,26 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="nhk-easy reader", lifespan=lifespan)
-templates = Jinja2Templates(
-    directory=os.path.join(os.path.dirname(__file__), "templates")
-)
+_here = os.path.dirname(__file__)
+_static_dir = os.path.join(_here, "static")
+templates = Jinja2Templates(directory=os.path.join(_here, "templates"))
+app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
+
+def _static_version() -> str:
+    """Cache-busting token from asset mtimes, so clients fetch fresh CSS/JS
+    after a redeploy instead of serving a stale cached copy."""
+    try:
+        mtimes = [
+            os.path.getmtime(os.path.join(_static_dir, f))
+            for f in ("app.css", "app.js")
+        ]
+        return str(int(max(mtimes)))
+    except OSError:
+        return "1"
+
+
+templates.env.globals["static_v"] = _static_version()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -41,6 +59,9 @@ async def article_list(request: Request):
             select(Article).order_by(Article.published_at.desc())
         )
         articles = result.all()
+    # Cards always request /image/{news_id}; the endpoint 404s when no image was
+    # downloaded and the client falls back to the placeholder. This avoids a
+    # per-article filesystem glob on every list render.
     return templates.TemplateResponse(
         request, "list.html", {"articles": articles}
     )

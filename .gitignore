@@ -11,3 +11,7 @@ downloads/
 *.egg-info/
 dist/
 .DS_Store
+
+# Agent skill installs (npx skills add)
+.agents/
+skills-lock.json
