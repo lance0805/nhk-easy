@@ -155,7 +155,11 @@ async def process_article(
     return article.news_id
 
 
-@flow(name="nhk-easy-daily-fetch")
+# A stale/racing NHK ONE session makes the JSON endpoints 401 (see
+# fetch_news_list). Each retry re-opens the crawler and re-runs the consent
+# gate from scratch, so it recovers a session that expired or lost the
+# gate-detection race between runs.
+@flow(name="nhk-easy-daily-fetch", retries=3, retry_delay_seconds=120)
 async def daily_fetch(
     limit: int | None = None,
     settings_block_name: str = DEFAULT_SETTINGS_BLOCK,

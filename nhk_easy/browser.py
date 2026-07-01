@@ -36,10 +36,21 @@ CONSENT_GATE_MARKER = "ご利用にあたって"
 # "Navigation triggered" and the caller verifies the gate via a reload.
 _CONSENT_JS = """
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The gate is SPA-rendered; poll for the checkbox before concluding it is
+// absent, so a race with the render is not mistaken for "no gate". This is
+// what lets the recovery path (forced consent after a 401) succeed even when
+// the gate had not finished rendering during the initial page load.
+let checkbox = null;
+for (let i = 0; i < 10; i++) {
+  checkbox = document.querySelector('input[type=checkbox]');
+  if (checkbox) break;
+  await sleep(500);
+}
+if (!checkbox) return 'no-gate';
 for (let attempt = 0; attempt < 3; attempt++) {
-  const checkbox = document.querySelector('input[type=checkbox]');
-  if (!checkbox) return 'no-gate';
-  if (!checkbox.checked) checkbox.click();
+  const cb = document.querySelector('input[type=checkbox]');
+  if (!cb) return 'consented';
+  if (!cb.checked) cb.click();
   await sleep(500);
   const button = [...document.querySelectorAll('button')]
     .find((b) => b.textContent.includes('サービスの利用を開始する'));
@@ -90,12 +101,33 @@ def _run_config(**kwargs: Any) -> CrawlerRunConfig:
     )
 
 
-async def open_easy_top(crawler: AsyncWebCrawler) -> None:
-    """Open the list page, passing the consent gate if it appears."""
-    result = await crawler.arun(EASY_TOP_URL, config=_run_config())
-    if CONSENT_GATE_MARKER not in (result.html or ""):
-        return
-    logger.info("Consent gate detected, passing it")
+async def _probe_session_status(crawler: AsyncWebCrawler) -> int:
+    """HTTP status of a news-list.json fetch in the current page session.
+
+    Unlike _fetch_json_in_page this never raises on a non-200 - it returns the
+    status so the caller can decide whether the session needs re-consent.
+    Returns -1 when the fetch could not run at all (JS did not report a status).
+    """
+    js = _FETCH_JSON_JS_TEMPLATE.format(url=NEWS_LIST_URL)
+    result = await crawler.arun(
+        EASY_TOP_URL,
+        config=_run_config(js_code=[js], js_only=True),
+    )
+    payload = result.js_execution_result
+    if isinstance(payload, dict) and "results" in payload:
+        payload = payload["results"][0]
+    if isinstance(payload, dict) and "status" in payload:
+        return int(payload["status"])
+    return -1
+
+
+async def _pass_consent_gate(crawler: AsyncWebCrawler) -> None:
+    """Run the consent click-through on the currently loaded page, then reload
+    so the SPA restarts with the new session cookies. Raises if the gate is
+    still present after the reload. The consent JS polls for the gate to
+    render, so this is safe to call whenever the session looks unauthorized -
+    if no gate is actually shown it is a no-op click-through."""
+    logger.info("Passing NHK ONE consent gate")
     # The consent click navigates away; crawl4ai may flag the intermediate
     # redirect page (no <body>) as "anti-bot" and report failure. Ignore the
     # result here - the reload below is the source of truth.
@@ -103,11 +135,43 @@ async def open_easy_top(crawler: AsyncWebCrawler) -> None:
         EASY_TOP_URL,
         config=_run_config(js_code=[_CONSENT_JS], js_only=True),
     )
-    # Reload so the SPA restarts with the new session cookies.
     result = await crawler.arun(EASY_TOP_URL, config=_run_config())
     if CONSENT_GATE_MARKER in (result.html or ""):
         raise RuntimeError("failed to pass the NHK ONE consent gate")
-    logger.info("Consent gate passed")
+
+
+async def open_easy_top(crawler: AsyncWebCrawler) -> None:
+    """Open the list page and guarantee an authorized session.
+
+    Passing the visible consent gate is not enough on its own: a lapsed
+    anonymous-auth cookie (or an SPA render that outraces our HTML snapshot)
+    can leave the gate unseen while the JSON endpoints still 401. So after the
+    initial gate pass we *verify* the session by probing news-list.json, and on
+    failure we force one more consent attempt before giving up. Flow-level
+    Prefect retries cover the residual case where the session cannot recover
+    within a single run.
+    """
+    result = await crawler.arun(EASY_TOP_URL, config=_run_config())
+    if CONSENT_GATE_MARKER in (result.html or ""):
+        await _pass_consent_gate(crawler)
+
+    status = await _probe_session_status(crawler)
+    if status == 200:
+        logger.info("NHK ONE session authorized")
+        return
+
+    # Unauthorized despite the check above - the gate likely raced the initial
+    # HTML snapshot, or the cookie lapsed. The consent JS waits for the gate to
+    # render, so run it against the live page, reload, and re-probe once.
+    logger.warning(f"Session probe returned {status}; forcing re-consent")
+    await _pass_consent_gate(crawler)
+    status = await _probe_session_status(crawler)
+    if status != 200:
+        raise RuntimeError(
+            "NHK ONE session not authorized after re-consent "
+            f"(news-list.json returned {status})"
+        )
+    logger.info("NHK ONE session recovered after re-consent")
 
 
 async def _fetch_json_in_page(crawler: AsyncWebCrawler, url: str) -> Any:
