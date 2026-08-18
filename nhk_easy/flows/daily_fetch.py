@@ -37,7 +37,10 @@ from nhk_easy.parser import parse_article
 from nhk_easy.prefect_settings import DEFAULT_SETTINGS_BLOCK, resolve_settings
 from nhk_easy.settings import Settings
 
-_NEWS_ID_RE = re.compile(r"^ne\d+")
+# NHK switched news_id formats around 2026-08-08: "ne2026080712571" became
+# "20260818de44738". Both appear in news-list.json during the transition, and
+# both share the same article URL / media URI conventions.
+_NEWS_ID_RE = re.compile(r"^(?:ne\d+|\d{8}de\d+)$")
 
 
 def article_url(news_id: str) -> str:
