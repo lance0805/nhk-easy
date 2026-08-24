@@ -256,6 +256,43 @@ main {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.listened-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.listened-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.listened-button:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.listened-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.listened-button__count {
+  min-width: 1.8rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
 
 /* ---------- Card grid ---------- */
 .card-grid {
@@ -543,6 +580,59 @@ rt {
   padding: 1.4rem 1.5rem;
 }
 .overlay__panel h2 { margin: 0 0 1rem; font-size: 1.15rem; }
+.listened-panel {
+  width: min(34rem, 100%);
+  display: grid;
+  gap: 1rem;
+}
+.listened-panel__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.listened-panel__close {
+  flex: none;
+}
+.listened-summary {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+.listened-export {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.listened-export__button[aria-disabled="true"],
+.listened-export__button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.listened-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.listened-item {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.listened-item strong {
+  line-height: 1.5;
+}
+.listened-item__meta {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
 .kbd-list { display: grid; gap: 0.55rem; }
 .kbd-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-size: 0.9rem; }
 .kbd-row span:last-child { color: var(--text-muted); text-align: right; }
@@ -580,6 +670,7 @@ kbd {
 @media (max-width: 600px) {
   main { padding: 1rem 0.85rem 3rem; }
   .card-grid { grid-template-columns: 1fr; gap: 0.9rem; }
+  .listened-button { width: 100%; justify-content: space-between; }
   .brand { font-size: 1.05rem; }
   .icon-btn { width: 2.5rem; height: 2.5rem; } /* larger touch target */
 
@@ -594,6 +685,8 @@ kbd {
   .player-card .plyr__time--duration { display: none; } /* hide duration, keep elapsed */
   .loop-control { font-size: 0.95rem; }
   .loop-control input { width: 4em; padding: 0.4rem 0.5rem; } /* easier to tap */
+  .listened-export { align-items: stretch; flex-direction: column; }
+  .listened-export__button { width: 100%; justify-content: center; }
 }
 
 /* ---------- Reduced motion ---------- */

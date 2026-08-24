@@ -10,11 +10,40 @@
     furigana: "nhk-furigana",    // "off" when hidden
     font: "nhk-font-scale",      // number string
     read: "nhk-read-ids",        // JSON array of news_id
+    listenCounts: "nhk-listen-counts", // JSON object {news_id: completed_plays}
+    listened: "nhk-listened-ids", // JSON array of sticky listened news_id
   };
+  var LISTENED_TARGET = 20;
 
   // ---------- Helpers ----------
   function $(sel, ctx) { return (ctx || document).querySelector(sel); }
   function $all(sel, ctx) { return Array.prototype.slice.call((ctx || document).querySelectorAll(sel)); }
+  function storageGet(key) {
+    try { return localStorage.getItem(key); }
+    catch (e) { return null; }
+  }
+  function storageSet(key, value) {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+  function storageRemove(key) {
+    try {
+      localStorage.removeItem(key);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+  function isPlainObject(value) {
+    return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+  function safeArray(raw) {
+    return Array.isArray(raw) ? raw : [];
+  }
 
   function isTyping(el) {
     if (!el) return false;
@@ -37,7 +66,7 @@
     return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
   }
   function effectiveDark() {
-    var pref = localStorage.getItem(LS.theme);
+    var pref = storageGet(LS.theme);
     if (pref === "dark") return true;
     if (pref === "light") return false;
     return systemPrefersDark();
@@ -58,14 +87,14 @@
   function toggleTheme() {
     // Toggle relative to what is currently shown.
     var next = effectiveDark() ? "light" : "dark";
-    localStorage.setItem(LS.theme, next);
+    storageSet(LS.theme, next);
     applyTheme(next);
     toast(next === "dark" ? "ダークモード" : "ライトモード");
   }
   // React to OS theme changes when following the system.
   if (window.matchMedia) {
     var mq = window.matchMedia("(prefers-color-scheme: dark)");
-    var onChange = function () { if (!localStorage.getItem(LS.theme)) syncThemeColor(); };
+    var onChange = function () { if (!storageGet(LS.theme)) syncThemeColor(); };
     if (mq.addEventListener) mq.addEventListener("change", onChange);
     else if (mq.addListener) mq.addListener(onChange);
   }
@@ -73,8 +102,8 @@
   // ---------- Furigana ----------
   function furiganaOn() { return root.getAttribute("data-furigana") !== "off"; }
   function applyFurigana(on) {
-    if (on) { root.removeAttribute("data-furigana"); localStorage.removeItem(LS.furigana); }
-    else { root.setAttribute("data-furigana", "off"); localStorage.setItem(LS.furigana, "off"); }
+    if (on) { root.removeAttribute("data-furigana"); storageRemove(LS.furigana); }
+    else { root.setAttribute("data-furigana", "off"); storageSet(LS.furigana, "off"); }
     var btn = $("#furigana-toggle");
     if (btn) btn.setAttribute("aria-pressed", String(!on));
   }
@@ -92,22 +121,58 @@
   function setFont(v) {
     v = Math.max(MIN_FONT, Math.min(MAX_FONT, Math.round(v * 10) / 10));
     root.style.setProperty("--font-scale", String(v));
-    if (Math.abs(v - 1) < 0.001) localStorage.removeItem(LS.font);
-    else localStorage.setItem(LS.font, String(v));
+    if (Math.abs(v - 1) < 0.001) storageRemove(LS.font);
+    else storageSet(LS.font, String(v));
     toast("文字サイズ " + Math.round(v * 100) + "%");
   }
   function bumpFont(dir) { setFont(currentFont() + dir * STEP); }
 
   // ---------- Read marks ----------
   function readSet() {
-    try { return new Set(JSON.parse(localStorage.getItem(LS.read) || "[]")); }
+    try { return new Set(safeArray(JSON.parse(storageGet(LS.read) || "[]"))); }
     catch (e) { return new Set(); }
+  }
+  function listenedSet() {
+    try { return new Set(safeArray(JSON.parse(storageGet(LS.listened) || "[]"))); }
+    catch (e) { return new Set(); }
+  }
+  function listenCounts() {
+    try {
+      var raw = JSON.parse(storageGet(LS.listenCounts) || "{}");
+      return isPlainObject(raw) ? raw : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function persistListenCounts(counts) {
+    storageSet(LS.listenCounts, JSON.stringify(counts));
+  }
+  function listenCount(id) {
+    var counts = listenCounts();
+    var value = parseInt(counts[id], 10);
+    return value > 0 ? value : 0;
+  }
+  function setListenCount(id, count) {
+    var counts = listenCounts();
+    counts[id] = Math.max(0, parseInt(count, 10) || 0);
+    persistListenCounts(counts);
+    return counts[id];
+  }
+  function isListened(id) {
+    return listenedSet().has(id) || listenCount(id) >= LISTENED_TARGET;
+  }
+  function markListened(id) {
+    var s = listenedSet();
+    if (!s.has(id)) {
+      s.add(id);
+      storageSet(LS.listened, JSON.stringify(Array.from(s)));
+    }
   }
   function markRead(id) {
     var s = readSet();
     if (s.has(id)) return;
     s.add(id);
-    localStorage.setItem(LS.read, JSON.stringify(Array.prototype.slice.call(s)));
+    storageSet(LS.read, JSON.stringify(Array.from(s)));
   }
 
   // ---------- Help overlay ----------
@@ -150,8 +215,101 @@
 
     var input = $("#search-input");
     var countEl = $("#list-count");
+    var listenedBtn = $("#listened-open");
+    var listenedBadge = $("#listened-count");
+    var listenedOverlay = $("#listened-overlay");
+    var listenedSummary = $("#listened-summary");
+    var listenedList = $("#listened-list");
+    var listenedClose = $("#listened-close");
+    var listenedForm = $("#listened-export-form");
+    var listenedInputs = $("#listened-hidden-inputs");
+    var listenedExport = $("#listened-export-button");
+    var lastListenedFocus = null;
+    function listenedFocusables() {
+      var nodes = [];
+      if (listenedExport && !listenedExport.disabled) nodes.push(listenedExport);
+      if (listenedClose) nodes.push(listenedClose);
+      return nodes;
+    }
 
     function visibleCards() { return cards.filter(function (c) { return c.style.display !== "none"; }); }
+    function listenedCards() {
+      return cards
+        .filter(function (c) { return isListened(c.dataset.id); })
+        .map(function (c) {
+          return {
+            id: c.dataset.id,
+            title: c.dataset.title || c.dataset.id,
+            hasAudio: c.dataset.hasAudio === "true",
+            completed: listenCount(c.dataset.id),
+          };
+        });
+    }
+    function clearNode(node) {
+      if (!node) return;
+      while (node.firstChild) node.removeChild(node.firstChild);
+      while (node.children && node.children.length) node.children.pop();
+    }
+    function listenedOpen() {
+      return listenedOverlay && listenedOverlay.classList.contains("is-open");
+    }
+    function closeListened() {
+      if (!listenedOverlay) return;
+      listenedOverlay.classList.remove("is-open");
+      listenedOverlay.setAttribute("aria-hidden", "true");
+      if (listenedBtn) listenedBtn.setAttribute("aria-expanded", "false");
+      if (lastListenedFocus && lastListenedFocus.focus) lastListenedFocus.focus();
+    }
+    function renderListened() {
+      if (!listenedBtn || !listenedBadge || !listenedSummary || !listenedList ||
+          !listenedInputs || !listenedExport) return;
+      var items = listenedCards();
+      var exportable = items.filter(function (item) { return item.hasAudio; });
+      listenedBadge.textContent = String(items.length);
+      listenedBtn.disabled = items.length === 0;
+      listenedBtn.setAttribute("aria-disabled", String(items.length === 0));
+      clearNode(listenedList);
+      clearNode(listenedInputs);
+      items.forEach(function (item) {
+        var li = document.createElement("li");
+        li.className = "listened-item";
+        var strong = document.createElement("strong");
+        strong.textContent = item.title;
+        li.appendChild(strong);
+        var meta = document.createElement("span");
+        meta.className = "listened-item__meta";
+        meta.textContent = Math.min(item.completed, LISTENED_TARGET) + " / " + LISTENED_TARGET +
+          (item.hasAudio ? "" : " · 音声なし");
+        li.appendChild(meta);
+        listenedList.appendChild(li);
+        if (!item.hasAudio) return;
+        var hidden = document.createElement("input");
+        hidden.setAttribute("type", "hidden");
+        hidden.setAttribute("name", "news_id");
+        hidden.value = item.id;
+        listenedInputs.appendChild(hidden);
+      });
+      if (items.length === 0) {
+        listenedSummary.textContent = "20回聞き終えた記事はまだありません。";
+      } else if (exportable.length === 0) {
+        listenedSummary.textContent = items.length + "件の聞いた記事があります。書き出せる音声はありません。";
+      } else {
+        listenedSummary.textContent = items.length + "件の聞いた記事 / " + exportable.length + "件を書き出せます。";
+      }
+      listenedExport.disabled = exportable.length === 0;
+      listenedExport.setAttribute("aria-disabled", String(exportable.length === 0));
+      if (listenedForm) listenedForm.setAttribute("data-exportable-count", String(exportable.length));
+    }
+    function openListened() {
+      if (!listenedOverlay) return;
+      renderListened();
+      lastListenedFocus = document.activeElement;
+      listenedOverlay.classList.add("is-open");
+      listenedOverlay.setAttribute("aria-hidden", "false");
+      if (listenedBtn) listenedBtn.setAttribute("aria-expanded", "true");
+      if (listenedExport && !listenedExport.disabled) listenedExport.focus();
+      else if (listenedClose) listenedClose.focus();
+    }
 
     function applyFilter(q) {
       q = (q || "").trim().toLowerCase();
@@ -166,6 +324,7 @@
       if (none) none.hidden = shown !== 0 || cards.length === 0;
       clearSelection();
     }
+    renderListened();
 
     // URL <-> search sync (state in query param per guidelines).
     if (input) {
@@ -215,6 +374,28 @@
 
     document.addEventListener("keydown", function (e) {
       if (helpOpen()) return;
+      if (e.key === "Escape" && listenedOpen()) {
+        e.preventDefault();
+        closeListened();
+        return;
+      }
+      if (listenedOpen()) {
+        if (e.key === "Tab") {
+          var focusables = listenedFocusables();
+          if (!focusables.length) return;
+          var current = focusables.indexOf(document.activeElement);
+          var delta = e.shiftKey ? -1 : 1;
+          var next = current === -1 ? (e.shiftKey ? focusables.length - 1 : 0) : (current + delta + focusables.length) % focusables.length;
+          e.preventDefault();
+          focusables[next].focus();
+          return;
+        }
+        if (e.key === "/" && !isTyping(e.target)) {
+          e.preventDefault();
+          return;
+        }
+        return;
+      }
       if (e.key === "/" && !isTyping(e.target)) {
         e.preventDefault();
         if (input) input.focus();
@@ -228,6 +409,13 @@
       else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); move(-1); }
       else if (e.key === "Enter" || e.key === "o") { openSelected(); }
     });
+    if (listenedBtn) listenedBtn.addEventListener("click", openListened);
+    if (listenedOverlay) {
+      listenedOverlay.addEventListener("click", function (e) {
+        if (e.target === listenedOverlay) closeListened();
+      });
+    }
+    if (listenedClose) listenedClose.addEventListener("click", closeListened);
   }
 
   // ---------- Detail page: progress + audio + read mark ----------
@@ -266,7 +454,7 @@
                      "current-time", "duration", "mute", "volume", "settings"],
           settings: ["speed"],
           seekTime: 5,
-          speed: { selected: parseFloat(localStorage.getItem("nhk-rate")) || 1, options: RATES },
+          speed: { selected: parseFloat(storageGet("nhk-rate")) || 1, options: RATES },
           keyboard: { focused: true, global: false },
           iconUrl: "/static/vendor/plyr.svg?v=3.8.4",
           tooltips: { controls: true, seek: true },
@@ -277,7 +465,7 @@
           }
         });
         plyr.on("ratechange", function () {
-          try { localStorage.setItem("nhk-rate", String(plyr.speed)); } catch (e) {}
+          storageSet("nhk-rate", String(plyr.speed));
         });
       }
 
@@ -286,22 +474,33 @@
       var progress = $("#loop-progress");
       var KEY = "nhk-easy-loop-count";
       var DEFAULT_LOOPS = 20;
-      countInput.value = parseInt(localStorage.getItem(KEY), 10) || DEFAULT_LOOPS;
+      var articleId = article.dataset.id;
+      var completed = articleId ? listenCount(articleId) : 0;
+      var loopPlayed = 0;
+      countInput.value = parseInt(storageGet(KEY), 10) || DEFAULT_LOOPS;
       countInput.addEventListener("change", function () {
         var v = Math.max(1, parseInt(countInput.value, 10) || DEFAULT_LOOPS);
         countInput.value = v;
-        localStorage.setItem(KEY, v);
+        storageSet(KEY, v);
       });
-      var played = 0;
-      function showProgress() { progress.textContent = played + " / " + countInput.value; }
+      function showProgress() {
+        progress.textContent = Math.min(completed, LISTENED_TARGET) + " / " + LISTENED_TARGET;
+      }
       media.addEventListener("play", function () {
-        if (played >= parseInt(countInput.value, 10)) played = 0;
-        if (played === 0) showProgress();
+        if (loopPlayed >= parseInt(countInput.value, 10)) loopPlayed = 0;
+        showProgress();
       });
       media.addEventListener("ended", function () {
-        played += 1;
+        loopPlayed += 1;
+        if (articleId) {
+          completed = setListenCount(articleId, completed + 1);
+          if (completed >= LISTENED_TARGET) {
+            markListened(articleId);
+            completed = Math.max(completed, LISTENED_TARGET);
+          }
+        }
         showProgress();
-        if (played < parseInt(countInput.value, 10)) { media.currentTime = 0; media.play(); }
+        if (loopPlayed < parseInt(countInput.value, 10)) { media.currentTime = 0; media.play(); }
       });
       showProgress();
     }

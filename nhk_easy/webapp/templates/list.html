@@ -16,11 +16,17 @@
                autocomplete="off" spellcheck="false" aria-label="記事を検索" enterkeyhint="search">
       </div>
       <span class="list-count" id="list-count" aria-live="polite"></span>
+      <button type="button" class="listened-button" id="listened-open"
+              aria-expanded="false" aria-controls="listened-overlay">
+        <span>我听过的新闻</span>
+        <span class="listened-button__count" id="listened-count" aria-live="polite">0</span>
+      </button>
     </div>
 
     <div class="card-grid" id="card-grid">
       {% for a in articles %}
-        <article class="card" data-id="{{ a.news_id }}" data-title="{{ a.title }}">
+        <article class="card" data-id="{{ a.news_id }}" data-title="{{ a.title }}"
+                 data-has-audio="{{ 'true' if a.news_id in playable_audio_ids else 'false' }}">
           <div class="card__media">
             <span class="card__placeholder" aria-hidden="true">{{ a.title[:1] }}</span>
             <img src="/image/{{ a.news_id }}" alt="" loading="lazy" width="320" height="180" data-thumb>
@@ -41,5 +47,29 @@
       {% endfor %}
       <p class="no-results" id="no-results" hidden>一致する記事がありません。</p>
     </div>
+
+    <div class="overlay" id="listened-overlay" role="dialog" aria-modal="true"
+         aria-labelledby="listened-title" aria-hidden="true">
+      <div class="overlay__panel listened-panel">
+        <div class="listened-panel__header">
+          <h2 id="listened-title">我听过的新闻</h2>
+          <button type="button" class="icon-btn listened-panel__close" id="listened-close" aria-label="閉じる">
+            <svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M5 5 15 15M15 5 5 15"/>
+            </svg>
+          </button>
+        </div>
+        <p class="listened-summary" id="listened-summary" aria-live="polite"></p>
+        <form class="listened-export" id="listened-export-form" method="post" action="/audio/archive"
+              target="listened-download-frame">
+          <div id="listened-hidden-inputs"></div>
+          <button type="submit" class="source-link listened-export__button" id="listened-export-button">
+            一键导出音频
+          </button>
+        </form>
+        <ul class="listened-list" id="listened-list"></ul>
+      </div>
+    </div>
+    <iframe name="listened-download-frame" title="音声ダウンロード" hidden></iframe>
   {% endif %}
 {% endblock %}
