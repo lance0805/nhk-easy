@@ -252,10 +252,20 @@
     var listenedForm = $("#listened-export-form");
     var listenedInputs = $("#listened-hidden-inputs");
     var listenedExport = $("#listened-export-button");
+    var listenedPagination = $("#listened-pagination");
+    var listenedPagePrevious = $("#listened-page-prev");
+    var listenedPageStatus = $("#listened-page-status");
+    var listenedPageNext = $("#listened-page-next");
+    var LISTENED_PAGE_SIZE = 10;
+    var listenedPage = 0;
     var lastListenedFocus = null;
     function listenedFocusables() {
       var nodes = [];
       if (listenedExport && !listenedExport.disabled) nodes.push(listenedExport);
+      if (listenedPagination && !listenedPagination.hidden) {
+        if (listenedPagePrevious && !listenedPagePrevious.disabled) nodes.push(listenedPagePrevious);
+        if (listenedPageNext && !listenedPageNext.disabled) nodes.push(listenedPageNext);
+      }
       if (listenedClose) nodes.push(listenedClose);
       return nodes;
     }
@@ -285,6 +295,7 @@
       if (!listenedOverlay) return;
       listenedOverlay.classList.remove("is-open");
       listenedOverlay.setAttribute("aria-hidden", "true");
+      document.body.classList.remove("has-open-overlay");
       if (listenedBtn) listenedBtn.setAttribute("aria-expanded", "false");
       if (lastListenedFocus && lastListenedFocus.focus) lastListenedFocus.focus();
     }
@@ -293,12 +304,16 @@
           !listenedInputs || !listenedExport) return;
       var items = listenedCards();
       var exportable = items.filter(function (item) { return item.hasAudio; });
+      var pageCount = Math.max(1, Math.ceil(items.length / LISTENED_PAGE_SIZE));
+      listenedPage = Math.max(0, Math.min(listenedPage, pageCount - 1));
+      var pageStart = listenedPage * LISTENED_PAGE_SIZE;
+      var pageItems = items.slice(pageStart, pageStart + LISTENED_PAGE_SIZE);
       listenedBadge.textContent = String(items.length);
       listenedBtn.disabled = items.length === 0;
       listenedBtn.setAttribute("aria-disabled", String(items.length === 0));
       clearNode(listenedList);
       clearNode(listenedInputs);
-      items.forEach(function (item) {
+      pageItems.forEach(function (item) {
         var li = document.createElement("li");
         li.className = "listened-item";
         var strong = document.createElement("strong");
@@ -310,6 +325,8 @@
           (item.hasAudio ? "" : " · 音声なし");
         li.appendChild(meta);
         listenedList.appendChild(li);
+      });
+      items.forEach(function (item) {
         if (!item.hasAudio) return;
         var hidden = document.createElement("input");
         hidden.setAttribute("type", "hidden");
@@ -317,6 +334,12 @@
         hidden.value = item.id;
         listenedInputs.appendChild(hidden);
       });
+      if (listenedPagination && listenedPagePrevious && listenedPageStatus && listenedPageNext) {
+        listenedPagination.hidden = pageCount <= 1;
+        listenedPagePrevious.disabled = listenedPage === 0;
+        listenedPageNext.disabled = listenedPage >= pageCount - 1;
+        listenedPageStatus.textContent = items.length ? (listenedPage + 1) + " / " + pageCount : "";
+      }
       if (items.length === 0) {
         listenedSummary.textContent = "20回聞き終えた記事はまだありません。";
       } else if (exportable.length === 0) {
@@ -330,10 +353,12 @@
     }
     function openListened() {
       if (!listenedOverlay) return;
+      listenedPage = 0;
       renderListened();
       lastListenedFocus = document.activeElement;
       listenedOverlay.classList.add("is-open");
       listenedOverlay.setAttribute("aria-hidden", "false");
+      document.body.classList.add("has-open-overlay");
       if (listenedBtn) listenedBtn.setAttribute("aria-expanded", "true");
       if (listenedExport && !listenedExport.disabled) listenedExport.focus();
       else if (listenedClose) listenedClose.focus();
@@ -448,6 +473,23 @@
       });
     }
     if (listenedClose) listenedClose.addEventListener("click", closeListened);
+    if (listenedPagePrevious) {
+      listenedPagePrevious.addEventListener("click", function () {
+        if (listenedPage <= 0) return;
+        listenedPage -= 1;
+        renderListened();
+        listenedList.scrollTop = 0;
+      });
+    }
+    if (listenedPageNext) {
+      listenedPageNext.addEventListener("click", function () {
+        var pageCount = Math.ceil(listenedCards().length / LISTENED_PAGE_SIZE);
+        if (listenedPage >= pageCount - 1) return;
+        listenedPage += 1;
+        renderListened();
+        listenedList.scrollTop = 0;
+      });
+    }
   }
 
   // ---------- Detail page: progress + audio + read mark ----------

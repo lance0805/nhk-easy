@@ -103,6 +103,7 @@ body {
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
 }
+body.has-open-overlay { overflow: hidden; }
 
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); text-decoration: underline; }
@@ -612,6 +613,8 @@ rt {
   width: min(28rem, 100%);
   max-height: 85vh;
   overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: 1.4rem 1.5rem;
 }
 .overlay__panel h2 { margin: 0 0 1rem; font-size: 1.15rem; }
@@ -690,6 +693,38 @@ rt {
   color: var(--text-muted);
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
+}
+.listened-pagination {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.75rem;
+}
+.listened-pagination[hidden] { display: none; }
+.listened-pagination__button {
+  min-height: 2.5rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.listened-pagination__button:last-child { justify-self: end; }
+.listened-pagination__button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.listened-pagination__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.listened-pagination__status {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .kbd-list { display: grid; gap: 0.55rem; }
 .kbd-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-size: 0.9rem; }

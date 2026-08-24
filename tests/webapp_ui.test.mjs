@@ -360,16 +360,11 @@ function buildListDocument(storageValues = {}, options = {}) {
   document.body.appendChild(tools);
 
   const grid = el(document, "div", { id: "card-grid", class: "card-grid" });
-  grid.appendChild(buildCard(document, {
-    id: "news-1",
-    title: "台風 ニュース",
-    hasAudio: "true",
-  }));
-  grid.appendChild(buildCard(document, {
-    id: "news-2",
-    title: "経済 ニュース",
-    hasAudio: "false",
-  }));
+  const cardOptions = options.cards || [
+    { id: "news-1", title: "台風 ニュース", hasAudio: "true" },
+    { id: "news-2", title: "経済 ニュース", hasAudio: "false" },
+  ];
+  cardOptions.forEach((card) => grid.appendChild(buildCard(document, card)));
   document.body.appendChild(grid);
 
   const noResults = el(document, "p", { id: "no-results" });
@@ -398,12 +393,21 @@ function buildListDocument(storageValues = {}, options = {}) {
   form.appendChild(inputs);
   form.appendChild(exportButton);
   const list = el(document, "ul", { id: "listened-list" });
+  const pagination = el(document, "nav", { id: "listened-pagination" });
+  pagination.hidden = true;
+  const previousPage = el(document, "button", { id: "listened-page-prev", type: "button" });
+  const pageStatus = el(document, "span", { id: "listened-page-status", "aria-live": "polite" });
+  const nextPage = el(document, "button", { id: "listened-page-next", type: "button" });
+  pagination.appendChild(previousPage);
+  pagination.appendChild(pageStatus);
+  pagination.appendChild(nextPage);
   const closeButton = el(document, "button", { id: "listened-close", type: "button" });
   closeButton.textContent = "关闭";
   panel.appendChild(title);
   panel.appendChild(summary);
   panel.appendChild(form);
   panel.appendChild(list);
+  panel.appendChild(pagination);
   panel.appendChild(closeButton);
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
@@ -731,6 +735,10 @@ test("list template exposes listened export seam", () => {
 
   assert.match(template, /id="listened-open"/);
   assert.match(template, /id="listened-overlay"/);
+  assert.match(template, /id="listened-pagination"/);
+  assert.match(template, /id="listened-page-prev"/);
+  assert.match(template, /id="listened-page-status"[^>]*aria-live="polite"/);
+  assert.match(template, /id="listened-page-next"/);
   assert.match(template, /action="\/audio\/archive"/);
   assert.match(template, /method="post"/);
   assert.match(template, /target="listened-download-frame"/);
@@ -787,6 +795,42 @@ test("list page dialog shows listened cards from server state and disables unava
   assert.equal(exportButton.disabled, false);
 });
 
+test("listened dialog paginates ten articles while exporting every completed audio", async () => {
+  const cards = Array.from({ length: 12 }, (_, index) => ({
+    id: `news-${index + 1}`,
+    title: `ニュース ${index + 1}`,
+    hasAudio: "true",
+  }));
+  const counts = Object.fromEntries(cards.map((card) => [card.id, 20]));
+  const api = createProgressApi(counts);
+  const env = buildListDocument({}, { fetch: api.fetch, cards });
+
+  runApp(env);
+  await settleAsyncWork();
+  env.document.querySelector("#listened-open").click();
+
+  const list = env.document.querySelector("#listened-list");
+  const pagination = env.document.querySelector("#listened-pagination");
+  const previousPage = env.document.querySelector("#listened-page-prev");
+  const nextPage = env.document.querySelector("#listened-page-next");
+  const status = env.document.querySelector("#listened-page-status");
+  const hiddenInputs = env.document.querySelectorAll('#listened-hidden-inputs input[name="news_id"]');
+
+  assert.equal(list.children.length, 10);
+  assert.equal(pagination.hidden, false);
+  assert.equal(status.textContent, "1 / 2");
+  assert.equal(previousPage.disabled, true);
+  assert.equal(nextPage.disabled, false);
+  assert.equal(hiddenInputs.length, 12);
+
+  nextPage.click();
+
+  assert.equal(list.children.length, 2);
+  assert.equal(status.textContent, "2 / 2");
+  assert.equal(previousPage.disabled, false);
+  assert.equal(nextPage.disabled, true);
+});
+
 test("list page restores focus on escape and disables export when no listened card has audio", async () => {
   const api = createProgressApi({ "news-2": 20 });
   const env = buildListDocument({}, { fetch: api.fetch });
@@ -800,9 +844,13 @@ test("list page restores focus on escape and disables export when no listened ca
 
   button.focus();
   button.click();
+
+  assert.equal(env.document.body.classList.contains("has-open-overlay"), true);
+
   env.document.dispatchEvent(createEvent("keydown", { key: "Escape", target: env.document.body }));
 
   assert.equal(env.document.activeElement, button);
+  assert.equal(env.document.body.classList.contains("has-open-overlay"), false);
   assert.equal(exportButton.disabled, true);
   assert.match(summary.textContent, /音声/);
 });

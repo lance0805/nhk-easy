@@ -69,6 +69,11 @@
           </button>
         </form>
         <ul class="listened-list" id="listened-list"></ul>
+        <nav class="listened-pagination" id="listened-pagination" aria-label="听过的新闻分页" hidden>
+          <button type="button" class="listened-pagination__button" id="listened-page-prev">上一页</button>
+          <span class="listened-pagination__status" id="listened-page-status" aria-live="polite"></span>
+          <button type="button" class="listened-pagination__button" id="listened-page-next">下一页</button>
+        </nav>
       </div>
     </div>
     <iframe name="listened-download-frame" title="音声ダウンロード" hidden></iframe>
