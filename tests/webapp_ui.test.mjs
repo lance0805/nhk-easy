@@ -428,6 +428,12 @@ function buildCard(document, { id, title, hasAudio }) {
   link.textContent = title;
   heading.appendChild(link);
   body.appendChild(heading);
+  const meta = el(document, "div", { class: "card__meta" });
+  const listenedStatus = el(document, "span", { class: "listened-status", hidden: "" });
+  listenedStatus.textContent = "20回達成";
+  listenedStatus.hidden = true;
+  meta.appendChild(listenedStatus);
+  body.appendChild(meta);
   card.appendChild(media);
   card.appendChild(body);
   return card;
@@ -614,6 +620,26 @@ test("list template exposes listened export seam", () => {
   assert.match(template, /target="listened-download-frame"/);
   assert.match(template, /<iframe[^>]*name="listened-download-frame"[^>]*title="音声ダウンロード"/);
   assert.match(template, /data-has-audio/);
+  assert.match(template, /class="listened-status"[^>]*hidden[^>]*>20回達成/);
+});
+
+test("list page highlights cards that completed 20 plays", () => {
+  const env = buildListDocument({
+    "nhk-listen-counts": JSON.stringify({ "news-1": 20, "news-2": 19 }),
+    "nhk-listened-ids": JSON.stringify(["news-1"]),
+  });
+
+  runApp(env);
+
+  const cards = env.document.querySelectorAll(".card");
+  const completedStatus = cards[0].querySelector(".listened-status");
+  const incompleteStatus = cards[1].querySelector(".listened-status");
+
+  assert.equal(cards[0].classList.contains("is-listened"), true);
+  assert.equal(completedStatus.hidden, false);
+  assert.equal(completedStatus.textContent, "20回達成");
+  assert.equal(cards[1].classList.contains("is-listened"), false);
+  assert.equal(incompleteStatus.hidden, true);
 });
 
 test("list page dialog shows listened cards from persisted state and disables export when audio is unavailable", () => {

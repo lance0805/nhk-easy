@@ -37,6 +37,7 @@
             </h2>
             <div class="card__meta">
               <span class="read-dot" aria-hidden="true"></span>
+              <span class="listened-status" hidden>20回達成</span>
               {% if a.genre %}<span class="badge" translate="no">{{ a.genre }}</span>{% endif %}
               {% if a.published_at %}
                 <time datetime="{{ a.published_at.isoformat() }}">{{ a.published_at.strftime("%Y-%m-%d") }}</time>

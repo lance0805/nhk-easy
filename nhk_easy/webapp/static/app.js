@@ -201,9 +201,19 @@
     if (!grid) return;
     var cards = $all(".card", grid);
 
-    // Mark already-read cards.
+    // Mark already-read and fully-listened cards from persistent browser state.
     var read = readSet();
-    cards.forEach(function (c) { if (read.has(c.dataset.id)) c.classList.add("is-read"); });
+    cards.forEach(function (c) {
+      if (read.has(c.dataset.id)) c.classList.add("is-read");
+      if (isListened(c.dataset.id)) {
+        c.classList.add("is-listened");
+        var status = $(".listened-status", c);
+        if (status) {
+          status.hidden = false;
+          status.removeAttribute("hidden");
+        }
+      }
+    });
 
     // Reveal thumbnails that load; drop the ones that 404 so the letter
     // placeholder shows through (no image was downloaded for that article).

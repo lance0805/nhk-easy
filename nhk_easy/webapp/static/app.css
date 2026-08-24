@@ -328,6 +328,19 @@ main {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
 }
+.card.is-listened {
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
+  box-shadow: var(--shadow-sm), inset 0 3px 0 var(--accent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 5%, var(--surface)),
+    var(--surface) 42%
+  );
+}
+.card.is-listened:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md), inset 0 3px 0 var(--accent);
+}
 .card__media {
   position: relative;
   aspect-ratio: 16 / 9;
@@ -415,6 +428,28 @@ main {
   flex: none;
 }
 .card.is-read .read-dot { background: var(--border-strong); }
+.card.is-listened .card__media { opacity: 0.82; }
+.card.is-listened .card__title { color: var(--text); }
+.card.is-listened .read-dot { background: var(--accent); }
+.listened-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 0.7rem;
+  font-weight: 750;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.listened-status::before {
+  content: "✓";
+  font-weight: 900;
+}
+.listened-status[hidden] { display: none; }
 
 .no-results {
   grid-column: 1 / -1;
@@ -604,9 +639,32 @@ rt {
   align-items: center;
   gap: 0.75rem;
 }
+.listened-export__button {
+  margin: 0;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.listened-export__button:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+  color: var(--accent-contrast);
+  text-decoration: none;
+}
+.listened-export__button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
 .listened-export__button[aria-disabled="true"],
 .listened-export__button:disabled {
-  opacity: 0.55;
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  box-shadow: none;
+  opacity: 0.72;
   cursor: not-allowed;
   pointer-events: none;
 }
