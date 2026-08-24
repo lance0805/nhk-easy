@@ -10,10 +10,10 @@
     furigana: "nhk-furigana",    // "off" when hidden
     font: "nhk-font-scale",      // number string
     read: "nhk-read-ids",        // JSON array of news_id
-    listenCounts: "nhk-listen-counts", // JSON object {news_id: completed_plays}
-    listened: "nhk-listened-ids", // JSON array of sticky listened news_id
   };
   var LISTENED_TARGET = 20;
+  var serverListenCounts = {};
+  var listeningProgressPromise = null;
 
   // ---------- Helpers ----------
   function $(sel, ctx) { return (ctx || document).querySelector(sel); }
@@ -132,41 +132,54 @@
     try { return new Set(safeArray(JSON.parse(storageGet(LS.read) || "[]"))); }
     catch (e) { return new Set(); }
   }
-  function listenedSet() {
-    try { return new Set(safeArray(JSON.parse(storageGet(LS.listened) || "[]"))); }
-    catch (e) { return new Set(); }
-  }
   function listenCounts() {
-    try {
-      var raw = JSON.parse(storageGet(LS.listenCounts) || "{}");
-      return isPlainObject(raw) ? raw : {};
-    } catch (e) {
-      return {};
-    }
-  }
-  function persistListenCounts(counts) {
-    storageSet(LS.listenCounts, JSON.stringify(counts));
+    return serverListenCounts;
   }
   function listenCount(id) {
     var counts = listenCounts();
     var value = parseInt(counts[id], 10);
     return value > 0 ? value : 0;
   }
-  function setListenCount(id, count) {
-    var counts = listenCounts();
-    counts[id] = Math.max(0, parseInt(count, 10) || 0);
-    persistListenCounts(counts);
-    return counts[id];
-  }
   function isListened(id) {
-    return listenedSet().has(id) || listenCount(id) >= LISTENED_TARGET;
+    return listenCount(id) >= LISTENED_TARGET;
   }
-  function markListened(id) {
-    var s = listenedSet();
-    if (!s.has(id)) {
-      s.add(id);
-      storageSet(LS.listened, JSON.stringify(Array.from(s)));
-    }
+  function loadListeningProgress() {
+    if (listeningProgressPromise) return listeningProgressPromise;
+    listeningProgressPromise = fetch("/api/listening-progress", { headers: { Accept: "application/json" } })
+      .then(function (response) {
+        if (!response.ok) throw new Error("listening progress unavailable");
+        return response.json();
+      })
+      .then(function (payload) {
+        var raw = payload && isPlainObject(payload.counts) ? payload.counts : {};
+        serverListenCounts = {};
+        Object.keys(raw).forEach(function (id) {
+          var count = parseInt(raw[id], 10);
+          if (count >= 0) serverListenCounts[id] = Math.min(count, LISTENED_TARGET);
+        });
+        return serverListenCounts;
+      })
+      .catch(function () { return serverListenCounts; });
+    return listeningProgressPromise;
+  }
+  function recordCompletedPlay(id) {
+    return loadListeningProgress()
+      .then(function () {
+        return fetch("/api/listening-progress/" + encodeURIComponent(id) + "/plays", {
+          method: "POST",
+          headers: { Accept: "application/json" },
+        });
+      })
+      .then(function (response) {
+        if (!response.ok) throw new Error("listening progress unavailable");
+        return response.json();
+      })
+      .then(function (item) {
+        var count = parseInt(item && item.completed_plays, 10);
+        if (count >= 0) serverListenCounts[id] = Math.min(count, LISTENED_TARGET);
+        return listenCount(id);
+      })
+      .catch(function () { return listenCount(id); });
   }
   function markRead(id) {
     var s = readSet();
@@ -201,19 +214,24 @@
     if (!grid) return;
     var cards = $all(".card", grid);
 
-    // Mark already-read and fully-listened cards from persistent browser state.
+    // Read marks stay browser-local; listening progress comes from the server.
     var read = readSet();
     cards.forEach(function (c) {
       if (read.has(c.dataset.id)) c.classList.add("is-read");
-      if (isListened(c.dataset.id)) {
-        c.classList.add("is-listened");
+    });
+    function applyListenedState() {
+      cards.forEach(function (c) {
+        c.classList.remove("is-listened");
         var status = $(".listened-status", c);
+        if (status) status.hidden = true;
+        if (!isListened(c.dataset.id)) return;
+        c.classList.add("is-listened");
         if (status) {
           status.hidden = false;
           status.removeAttribute("hidden");
         }
-      }
-    });
+      });
+    }
 
     // Reveal thumbnails that load; drop the ones that 404 so the letter
     // placeholder shows through (no image was downloaded for that article).
@@ -335,6 +353,10 @@
       clearSelection();
     }
     renderListened();
+    loadListeningProgress().then(function () {
+      applyListenedState();
+      renderListened();
+    });
 
     // URL <-> search sync (state in query param per guidelines).
     if (input) {
@@ -503,16 +525,19 @@
       media.addEventListener("ended", function () {
         loopPlayed += 1;
         if (articleId) {
-          completed = setListenCount(articleId, completed + 1);
-          if (completed >= LISTENED_TARGET) {
-            markListened(articleId);
-            completed = Math.max(completed, LISTENED_TARGET);
-          }
+          recordCompletedPlay(articleId).then(function (count) {
+            completed = count;
+            showProgress();
+          });
         }
         showProgress();
         if (loopPlayed < parseInt(countInput.value, 10)) { media.currentTime = 0; media.play(); }
       });
       showProgress();
+      loadListeningProgress().then(function () {
+        completed = articleId ? listenCount(articleId) : 0;
+        showProgress();
+      });
     }
 
     document.addEventListener("keydown", function (e) {

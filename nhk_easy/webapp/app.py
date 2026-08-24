@@ -16,12 +16,14 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from starlette.background import BackgroundTask
 
 from nhk_easy.db import create_engine, init_db
-from nhk_easy.models import Article
+from nhk_easy.models import Article, ListeningProgress, ListeningProgressUpdate
 from nhk_easy.settings import Settings
 
 settings = Settings()
@@ -54,8 +56,70 @@ class DatabaseArticleRepository:
         return [by_id[news_id] for news_id in news_ids if news_id in by_id]
 
 
+class ListeningProgressRepository(Protocol):
+    async def get_all(self) -> list[ListeningProgress]: ...
+
+    async def increment(self, news_id: str) -> ListeningProgress: ...
+
+    async def set_completed_plays(
+        self, news_id: str, completed_plays: int
+    ) -> ListeningProgress: ...
+
+
+class DatabaseListeningProgressRepository:
+    def __init__(self, database_engine):
+        self._engine = database_engine
+
+    async def get_all(self) -> list[ListeningProgress]:
+        async with AsyncSession(self._engine) as session:
+            result = await session.exec(select(ListeningProgress))
+            return list(result.all())
+
+    async def increment(self, news_id: str) -> ListeningProgress:
+        statement = (
+            insert(ListeningProgress)
+            .values(news_id=news_id, completed_plays=1)
+            .on_conflict_do_update(
+                index_elements=[ListeningProgress.news_id],
+                set_={
+                    "completed_plays": func.least(
+                        ListeningProgress.completed_plays + 1, 20
+                    )
+                },
+            )
+        )
+        async with AsyncSession(self._engine) as session:
+            await session.exec(statement)
+            await session.commit()
+            progress = await session.get(ListeningProgress, news_id)
+        assert progress is not None
+        return progress
+
+    async def set_completed_plays(
+        self, news_id: str, completed_plays: int
+    ) -> ListeningProgress:
+        statement = (
+            insert(ListeningProgress)
+            .values(news_id=news_id, completed_plays=completed_plays)
+            .on_conflict_do_update(
+                index_elements=[ListeningProgress.news_id],
+                set_={"completed_plays": completed_plays},
+            )
+        )
+        async with AsyncSession(self._engine) as session:
+            await session.exec(statement)
+            await session.commit()
+            progress = await session.get(ListeningProgress, news_id)
+        assert progress is not None
+        return progress
+
+
 async def get_article_repository() -> ArticleRepository:
     return DatabaseArticleRepository(engine)
+
+
+async def get_listening_progress_repository() -> ListeningProgressRepository:
+    return DatabaseListeningProgressRepository(engine)
 
 
 def get_settings() -> Settings:
@@ -137,6 +201,37 @@ def _static_version() -> str:
 
 
 templates.env.globals["static_v"] = _static_version()
+
+
+@app.get("/api/listening-progress")
+async def listening_progress(
+    repository: Annotated[
+        ListeningProgressRepository, Depends(get_listening_progress_repository)
+    ],
+):
+    progress = await repository.get_all()
+    return {"counts": {item.news_id: item.completed_plays for item in progress}}
+
+
+@app.post("/api/listening-progress/{news_id}/plays")
+async def complete_listening_play(
+    news_id: str,
+    repository: Annotated[
+        ListeningProgressRepository, Depends(get_listening_progress_repository)
+    ],
+):
+    return await repository.increment(news_id)
+
+
+@app.put("/api/listening-progress/{news_id}")
+async def set_listening_progress(
+    news_id: str,
+    update: ListeningProgressUpdate,
+    repository: Annotated[
+        ListeningProgressRepository, Depends(get_listening_progress_repository)
+    ],
+):
+    return await repository.set_completed_plays(news_id, update.completed_plays)
 
 
 @app.get("/", response_class=HTMLResponse)

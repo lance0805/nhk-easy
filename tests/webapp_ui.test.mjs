@@ -447,6 +447,17 @@ function el(document, tag, attrs = {}) {
 
 function createEnv(document, storageValues, options = {}) {
   const storage = createStorage(storageValues, options.storageBehavior);
+  const fetchCalls = [];
+  const fetch = async (url, request = {}) => {
+    fetchCalls.push({ url, request });
+    if (options.fetch) return options.fetch(url, request);
+    return {
+      ok: true,
+      async json() {
+        return { counts: {} };
+      },
+    };
+  };
   const history = { replaceState() {} };
   const location = { pathname: "/", search: "", href: "/" };
   const window = new EventTargetLike();
@@ -468,6 +479,7 @@ function createEnv(document, storageValues, options = {}) {
       return "1";
     },
   });
+  window.fetch = fetch;
 
   const context = {
     window,
@@ -487,8 +499,9 @@ function createEnv(document, storageValues, options = {}) {
       return createEvent(type, detail);
     },
     getComputedStyle: window.getComputedStyle,
+    fetch,
   };
-  return { context, document, storage, window };
+  return { context, document, storage, window, fetchCalls };
 }
 
 function runApp(env) {
@@ -496,13 +509,63 @@ function runApp(env) {
   vm.runInNewContext(source, env.context, { filename: appJsPath });
 }
 
-test("detail page persists completed play counts and keeps loop replay behavior", () => {
+async function settleAsyncWork() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function createProgressApi(initialCounts = {}) {
+  const counts = { ...initialCounts };
+  return {
+    counts,
+    async fetch(url, request = {}) {
+      const match = url.match(/^\/api\/listening-progress\/([^/]+)\/plays$/);
+      if (match && request.method === "POST") {
+        const newsId = decodeURIComponent(match[1]);
+        counts[newsId] = Math.min((counts[newsId] || 0) + 1, 20);
+        return {
+          ok: true,
+          async json() {
+            return { news_id: newsId, completed_plays: counts[newsId] };
+          },
+        };
+      }
+      return {
+        ok: true,
+        async json() {
+          return { counts: { ...counts } };
+        },
+      };
+    },
+  };
+}
+
+test("detail page persists completed plays through the server and keeps loop replay behavior", async () => {
+  let serverCount = 7;
+  const progressApi = async (url, request) => {
+    if (url.endsWith("/plays") && request.method === "POST") {
+      serverCount = Math.min(serverCount + 1, 20);
+      return {
+        ok: true,
+        async json() {
+          return { news_id: "news-1", completed_plays: serverCount };
+        },
+      };
+    }
+    return {
+      ok: true,
+      async json() {
+        return { counts: { "news-1": serverCount } };
+      },
+    };
+  };
   const env = buildDetailDocument({
-    "nhk-listen-counts": JSON.stringify({ "news-1": 7 }),
     "nhk-easy-loop-count": "3",
+  }, {
+    fetch: progressApi,
   });
 
   runApp(env);
+  await settleAsyncWork();
 
   const media = env.document.querySelector("#player");
   const progress = env.document.querySelector("#loop-progress");
@@ -512,102 +575,155 @@ test("detail page persists completed play counts and keeps loop replay behavior"
   assert.equal(progress.textContent, "7 / 20");
 
   media.dispatchEvent(createEvent("ended"));
+  await settleAsyncWork();
   assert.equal(progress.textContent, "8 / 20");
   assert.equal(media.currentTime, 0);
   assert.equal(media._playCalls, 1);
 
   media.dispatchEvent(createEvent("ended"));
+  await settleAsyncWork();
   assert.equal(media._playCalls, 2);
 
   media.dispatchEvent(createEvent("ended"));
+  await settleAsyncWork();
   assert.equal(media._playCalls, 2);
 
-  const storedCounts = JSON.parse(env.storage.getItem("nhk-listen-counts"));
-  assert.equal(storedCounts["news-1"], 10);
+  assert.equal(serverCount, 10);
+  assert.equal(env.storage.getItem("nhk-listen-counts"), null);
 
-  const reload = buildDetailDocument(env.storage.dump());
+  const reload = buildDetailDocument(env.storage.dump(), { fetch: progressApi });
   runApp(reload);
+  await settleAsyncWork();
   assert.equal(reload.document.querySelector("#loop-progress").textContent, "10 / 20");
 });
 
-test("detail page marks article listened after 20 completed plays and keeps it sticky", () => {
-  const env = buildDetailDocument({
-    "nhk-listen-counts": JSON.stringify({ "news-1": 19 }),
+test("detail page waits for initial server progress before recording a completed play", async () => {
+  let resolveInitialProgress;
+  let postCalls = 0;
+  const env = buildDetailDocument({}, {
+    fetch: async (url, request) => {
+      if (request.method === "POST") {
+        postCalls += 1;
+        return {
+          ok: true,
+          async json() {
+            return { news_id: "news-1", completed_plays: 6 };
+          },
+        };
+      }
+      return new Promise((resolve) => {
+        resolveInitialProgress = () => resolve({
+          ok: true,
+          async json() {
+            return { counts: { "news-1": 5 } };
+          },
+        });
+      });
+    },
   });
 
   runApp(env);
+  env.document.querySelector("#player").dispatchEvent(createEvent("ended"));
+  await Promise.resolve();
+
+  assert.equal(postCalls, 0);
+
+  resolveInitialProgress();
+  await settleAsyncWork();
+
+  assert.equal(postCalls, 1);
+  assert.equal(env.document.querySelector("#loop-progress").textContent, "6 / 20");
+});
+
+test("detail page keeps server progress capped at 20", async () => {
+  const api = createProgressApi({ "news-1": 19 });
+  const env = buildDetailDocument({}, { fetch: api.fetch });
+
+  runApp(env);
+  await settleAsyncWork();
 
   const media = env.document.querySelector("#player");
   media.dispatchEvent(createEvent("ended"));
+  await settleAsyncWork();
 
-  assert.deepEqual(
-    JSON.parse(env.storage.getItem("nhk-listened-ids")),
-    ["news-1"],
-  );
+  assert.equal(api.counts["news-1"], 20);
   assert.equal(env.document.querySelector("#loop-progress").textContent, "20 / 20");
 
   media.dispatchEvent(createEvent("ended"));
+  await settleAsyncWork();
   assert.equal(env.document.querySelector("#loop-progress").textContent, "20 / 20");
-  assert.deepEqual(
-    JSON.parse(env.storage.getItem("nhk-listened-ids")),
-    ["news-1"],
-  );
+  assert.equal(api.counts["news-1"], 20);
 });
 
-test("detail page survives storage errors on ended and still updates progress and loop playback", () => {
+test("detail page survives storage errors because listening progress uses the server", async () => {
+  const api = createProgressApi();
   const env = buildDetailDocument(
     { "nhk-easy-loop-count": "2" },
-    { storageBehavior: { throwOnGet: new Error("SecurityError"), throwOnSet: new Error("QuotaExceededError") } },
+    {
+      fetch: api.fetch,
+      storageBehavior: { throwOnGet: new Error("SecurityError"), throwOnSet: new Error("QuotaExceededError") },
+    },
   );
 
   runApp(env);
+  await settleAsyncWork();
 
   const media = env.document.querySelector("#player");
   const progress = env.document.querySelector("#loop-progress");
 
   media.dispatchEvent(createEvent("ended"));
+  await settleAsyncWork();
 
   assert.equal(progress.textContent, "1 / 20");
   assert.equal(media._playCalls, 1);
   assert.equal(media.currentTime, 0);
 });
 
-test("detail page safely degrades malformed persisted shapes and persists corrected listened state", () => {
-  const env = buildDetailDocument({
-    "nhk-listen-counts": JSON.stringify([]),
-    "nhk-listened-ids": JSON.stringify("oops"),
-    "nhk-easy-loop-count": "1",
+test("detail page safely degrades a malformed server progress payload", async () => {
+  let requestCount = 0;
+  const env = buildDetailDocument({ "nhk-easy-loop-count": "1" }, {
+    fetch: async (url, request) => {
+      requestCount += 1;
+      if (request.method === "POST") {
+        return { ok: true, async json() { return { news_id: "news-1", completed_plays: 20 }; } };
+      }
+      return { ok: true, async json() { return { counts: [] }; } };
+    },
   });
 
   runApp(env);
+  await settleAsyncWork();
 
   const media = env.document.querySelector("#player");
   const progress = env.document.querySelector("#loop-progress");
 
   assert.equal(progress.textContent, "0 / 20");
 
-  for (let i = 0; i < 20; i += 1) media.dispatchEvent(createEvent("ended"));
+  media.dispatchEvent(createEvent("ended"));
+  await settleAsyncWork();
 
   assert.equal(media._playCalls, 0);
   assert.equal(progress.textContent, "20 / 20");
-  assert.deepEqual(JSON.parse(env.storage.getItem("nhk-listen-counts")), { "news-1": 20 });
-  assert.deepEqual(JSON.parse(env.storage.getItem("nhk-listened-ids")), ["news-1"]);
+  assert.equal(requestCount, 2);
+  assert.equal(env.storage.getItem("nhk-listen-counts"), null);
 });
 
-test("threshold crossing to listened is independent from loop count", () => {
+test("server threshold crossing to listened is independent from loop count", async () => {
+  const api = createProgressApi({ "news-1": 19 });
   const env = buildDetailDocument({
-    "nhk-listen-counts": JSON.stringify({ "news-1": 19 }),
     "nhk-easy-loop-count": "1",
-  });
+  }, { fetch: api.fetch });
 
   runApp(env);
+  await settleAsyncWork();
 
   const media = env.document.querySelector("#player");
   media.dispatchEvent(createEvent("ended"));
+  await settleAsyncWork();
 
   assert.equal(media._playCalls, 0);
   assert.equal(env.document.querySelector("#loop-progress").textContent, "20 / 20");
-  assert.deepEqual(JSON.parse(env.storage.getItem("nhk-listened-ids")), ["news-1"]);
+  assert.equal(api.counts["news-1"], 20);
 });
 
 test("list template exposes listened export seam", () => {
@@ -623,13 +739,18 @@ test("list template exposes listened export seam", () => {
   assert.match(template, /class="listened-status"[^>]*hidden[^>]*>20回達成/);
 });
 
-test("list page highlights cards that completed 20 plays", () => {
-  const env = buildListDocument({
-    "nhk-listen-counts": JSON.stringify({ "news-1": 20, "news-2": 19 }),
-    "nhk-listened-ids": JSON.stringify(["news-1"]),
+test("list page highlights cards from server progress after refresh", async () => {
+  const env = buildListDocument({}, {
+    fetch: async () => ({
+      ok: true,
+      async json() {
+        return { counts: { "news-1": 20, "news-2": 19 } };
+      },
+    }),
   });
 
   runApp(env);
+  await settleAsyncWork();
 
   const cards = env.document.querySelectorAll(".card");
   const completedStatus = cards[0].querySelector(".listened-status");
@@ -640,15 +761,15 @@ test("list page highlights cards that completed 20 plays", () => {
   assert.equal(completedStatus.textContent, "20回達成");
   assert.equal(cards[1].classList.contains("is-listened"), false);
   assert.equal(incompleteStatus.hidden, true);
+  assert.equal(env.fetchCalls[0].url, "/api/listening-progress");
 });
 
-test("list page dialog shows listened cards from persisted state and disables export when audio is unavailable", () => {
-  const env = buildListDocument({
-    "nhk-listen-counts": JSON.stringify({ "news-1": 20, "news-2": 20 }),
-    "nhk-listened-ids": JSON.stringify(["news-1", "news-2"]),
-  });
+test("list page dialog shows listened cards from server state and disables unavailable audio", async () => {
+  const api = createProgressApi({ "news-1": 20, "news-2": 20 });
+  const env = buildListDocument({}, { fetch: api.fetch });
 
   runApp(env);
+  await settleAsyncWork();
 
   const button = env.document.querySelector("#listened-open");
   const overlay = env.document.querySelector("#listened-overlay");
@@ -666,13 +787,12 @@ test("list page dialog shows listened cards from persisted state and disables ex
   assert.equal(exportButton.disabled, false);
 });
 
-test("list page restores focus on escape and disables export when no listened card has audio", () => {
-  const env = buildListDocument({
-    "nhk-listen-counts": JSON.stringify({ "news-2": 20 }),
-    "nhk-listened-ids": JSON.stringify(["news-2"]),
-  });
+test("list page restores focus on escape and disables export when no listened card has audio", async () => {
+  const api = createProgressApi({ "news-2": 20 });
+  const env = buildListDocument({}, { fetch: api.fetch });
 
   runApp(env);
+  await settleAsyncWork();
 
   const button = env.document.querySelector("#listened-open");
   const exportButton = env.document.querySelector("#listened-export-button");
@@ -687,13 +807,12 @@ test("list page restores focus on escape and disables export when no listened ca
   assert.match(summary.textContent, /音声/);
 });
 
-test("list page traps Tab focus inside dialog and '/' does not focus background search while open", () => {
-  const env = buildListDocument({
-    "nhk-listen-counts": JSON.stringify({ "news-1": 20 }),
-    "nhk-listened-ids": JSON.stringify({ bad: true }),
-  });
+test("list page traps Tab focus inside dialog and '/' does not focus background search while open", async () => {
+  const api = createProgressApi({ "news-1": 20 });
+  const env = buildListDocument({}, { fetch: api.fetch });
 
   runApp(env);
+  await settleAsyncWork();
 
   const button = env.document.querySelector("#listened-open");
   const closeButton = env.document.querySelector("#listened-close");
