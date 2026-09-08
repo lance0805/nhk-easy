@@ -48,7 +48,10 @@
   function isTyping(el) {
     if (!el) return false;
     var tag = el.tagName;
-    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+    // Number/range inputs (loop count, Plyr sliders) keep focus after a tap on
+    // iPad; they are not text entry, so shortcuts must keep working there.
+    if (tag === "INPUT") return el.type !== "number" && el.type !== "range";
+    return tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
   }
 
   var toastTimer;
@@ -555,6 +558,7 @@
       countInput.addEventListener("change", function () {
         var v = Math.max(1, parseInt(countInput.value, 10) || DEFAULT_LOOPS);
         countInput.value = v;
+        countInput.blur();
         storageSet(KEY, v);
       });
       function showProgress() {
