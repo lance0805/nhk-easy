@@ -45,6 +45,23 @@
     return Array.isArray(raw) ? raw : [];
   }
 
+  // Japanese IMEs on iPad rewrite e.key even with no text field focused
+  // (space -> U+3000, letters -> kana), so plain e.key comparisons miss.
+  // Keep e.key when it is a normal ASCII char or a named key (layout-correct),
+  // and only fall back to the physical e.code when the IME has mangled it.
+  var CODE_CHARS = { Space: " ", Slash: "/", BracketLeft: "[", BracketRight: "]", Equal: "=", Minus: "-" };
+  var SHIFTED = { "/": "?", "=": "+", "-": "_" };
+  function keyOf(e) {
+    var k = e.key || "", c = e.code || "";
+    if (k.length === 1 && k.charCodeAt(0) < 128) return k;
+    if (k.length > 1 && k !== "Unidentified" && k !== "Process") return k;
+    if (c.indexOf("Arrow") === 0) return c;
+    if (/^Key[A-Z]$/.test(c)) return c[3].toLowerCase();
+    if (/^Digit[0-9]$/.test(c)) return c[5];
+    if (c in CODE_CHARS) return e.shiftKey ? (SHIFTED[CODE_CHARS[c]] || CODE_CHARS[c]) : CODE_CHARS[c];
+    return k;
+  }
+
   function isTyping(el) {
     if (!el) return false;
     var tag = el.tagName;
@@ -433,14 +450,15 @@
     }
 
     document.addEventListener("keydown", function (e) {
+      var key = keyOf(e);
       if (helpOpen()) return;
-      if (e.key === "Escape" && listenedOpen()) {
+      if (key === "Escape" && listenedOpen()) {
         e.preventDefault();
         closeListened();
         return;
       }
       if (listenedOpen()) {
-        if (e.key === "Tab") {
+        if (key === "Tab") {
           var focusables = listenedFocusables();
           if (!focusables.length) return;
           var current = focusables.indexOf(document.activeElement);
@@ -450,24 +468,24 @@
           focusables[next].focus();
           return;
         }
-        if (e.key === "/" && !isTyping(e.target)) {
+        if (key === "/" && !isTyping(e.target)) {
           e.preventDefault();
           return;
         }
         return;
       }
-      if (e.key === "/" && !isTyping(e.target)) {
+      if (key === "/" && !isTyping(e.target)) {
         e.preventDefault();
         if (input) input.focus();
         return;
       }
       if (isTyping(e.target)) {
-        if (e.key === "Escape" && input && e.target === input) { input.blur(); }
+        if (key === "Escape" && input && e.target === input) { input.blur(); }
         return;
       }
-      if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); move(1); }
-      else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); move(-1); }
-      else if (e.key === "Enter" || e.key === "o") { openSelected(); }
+      if (key === "j" || key === "ArrowDown") { e.preventDefault(); move(1); }
+      else if (key === "k" || key === "ArrowUp") { e.preventDefault(); move(-1); }
+      else if (key === "Enter" || key === "o") { openSelected(); }
     });
     if (listenedBtn) listenedBtn.addEventListener("click", openListened);
     if (listenedOverlay) {
@@ -587,14 +605,15 @@
     }
 
     document.addEventListener("keydown", function (e) {
+      var key = keyOf(e);
       if (helpOpen() || isTyping(e.target)) return;
       if (!media) {
-        if (e.key === "u" || e.key === "Backspace") { e.preventDefault(); window.location.href = "/"; }
+        if (key === "u" || key === "Backspace") { e.preventDefault(); window.location.href = "/"; }
         return;
       }
       // When focus is inside the player controls, let Plyr handle the key.
       var inControls = e.target && e.target.closest && e.target.closest(".plyr");
-      switch (e.key) {
+      switch (key) {
         case " ":
           if (inControls) return;
           e.preventDefault();
@@ -613,7 +632,7 @@
           var cur = plyr ? plyr.speed : media.playbackRate;
           var i = RATES.indexOf(cur);
           if (i < 0) i = RATES.indexOf(1);
-          i = Math.max(0, Math.min(RATES.length - 1, i + (e.key === "]" ? 1 : -1)));
+          i = Math.max(0, Math.min(RATES.length - 1, i + (key === "]" ? 1 : -1)));
           if (plyr) plyr.speed = RATES[i]; else media.playbackRate = RATES[i];
           toast("再生速度 " + RATES[i] + "x");
           break;
@@ -650,10 +669,11 @@
     }
 
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && helpOpen()) { e.preventDefault(); closeHelp(); return; }
+      var key = keyOf(e);
+      if (key === "Escape" && helpOpen()) { e.preventDefault(); closeHelp(); return; }
       if (isTyping(e.target) || helpOpen()) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      switch (e.key) {
+      switch (key) {
         case "?": e.preventDefault(); openHelp(); break;
         case "t": toggleTheme(); break;
         case "f": toggleFurigana(); break;
